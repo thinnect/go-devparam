@@ -12,7 +12,7 @@ import "encoding/hex"
 import "github.com/jessevdk/go-flags"
 import "github.com/proactivity-lab/go-loggers"
 import "github.com/proactivity-lab/go-sfconnection"
-import "github.com/proactivity-lab/go-devparam"
+import "github.com/thinnect/go-devparam"
 
 const ApplicationVersionMajor = 0
 const ApplicationVersionMinor = 1
