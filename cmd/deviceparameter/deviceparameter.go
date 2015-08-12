@@ -8,6 +8,9 @@ import "os"
 import "log"
 import "time"
 import "encoding/hex"
+import "encoding/binary"
+import "strconv"
+import "bytes"
 
 import "github.com/jessevdk/go-flags"
 import "github.com/proactivity-lab/go-loggers"
@@ -33,22 +36,51 @@ func (self HexString) MarshalFlag() (string, error) {
 	return hex.EncodeToString(self), nil
 }
 
+func parseValue(opts Options) ([]byte, error) {
+	buf := new(bytes.Buffer)
+	if opts.Uint8 {
+		if v, err := strconv.ParseUint(opts.Value, 10, 8); err != nil {
+			return nil, err
+		} else if err = binary.Write(buf, binary.BigEndian, uint8(v)); err != nil {
+			return nil, err
+		}
+		return buf.Bytes(), nil
+	} else if opts.Uint16 {
+		if v, err := strconv.ParseUint(opts.Value, 10, 16); err != nil {
+			return nil, err
+		} else if err = binary.Write(buf, binary.BigEndian, uint16(v)); err != nil {
+			return nil, err
+		}
+	} else if opts.Uint32 {
+		if v, err := strconv.ParseUint(opts.Value, 10, 32); err != nil {
+			return nil, err
+		} else if err = binary.Write(buf, binary.BigEndian, uint32(v)); err != nil {
+			return nil, err
+		}
+	}
+	return hex.DecodeString(opts.Value)
+}
+
+type Options struct {
+	Positional struct {
+		ConnectionString string `description:"Connectionstring sf@HOST:PORT"`
+	} `positional-args:"yes"`
+
+	Group sfconnection.AMGroup `short:"g" long:"group" default:"22" description:"Packet AM Group (hex)"`
+
+	Parameter string `short:"p" long:"parameter" description:"Name of the parameter"`
+	Value     string `short:"v" long:"value"     description:"Value to set"`
+	Uint8     bool   `long:"uint8"  description:"Value is uint8"`
+	Uint16    bool   `long:"uint16" description:"Value is uint16"`
+	Uint32    bool   `long:"uint32" description:"Value is uint32"`
+
+	Debug       []bool `short:"D" long:"debug"   description:"Debug mode, print raw packets"`
+	ShowVersion func() `short:"V" long:"version" description:"Show application version"`
+}
+
 func main() {
 
-	var opts struct {
-		Positional struct {
-			ConnectionString string `description:"Connectionstring sf@HOST:PORT"`
-		} `positional-args:"yes"`
-
-		Group sfconnection.AMGroup `short:"g" long:"group" default:"22" description:"Packet AM Group (hex)"`
-
-		Parameter string    `short:"p" long:"parameter" description:"Name of the parameter"`
-		Value     HexString `short:"v" long:"value"     description:"Value to set"`
-
-		Debug       []bool `short:"D" long:"debug"   description:"Debug mode, print raw packets"`
-		ShowVersion func() `short:"V" long:"version" description:"Show application version"`
-	}
-
+	var opts Options
 	opts.ShowVersion = func() {
 		if ApplicationBuildDate == "" {
 			ApplicationBuildDate = "YYYY-mm-dd_HH:MM:SS"
@@ -91,18 +123,22 @@ func main() {
 
 	if len(opts.Parameter) > 0 {
 		if len(opts.Value) > 0 {
-			logger.Info.Printf("Set %s to %X\n", opts.Parameter, opts.Value)
-			err := dpm.SetValue(opts.Parameter, opts.Value)
+			value, err := parseValue(opts)
 			if err == nil {
-				logger.Info.Printf("Done\n")
+				logger.Info.Printf("Set %s to 0x%X\n", opts.Parameter, value)
+				if val, err := dpm.SetValue(opts.Parameter, value); err == nil {
+					logger.Info.Printf("%s = %s\n", val.Name, val)
+				} else {
+					logger.Info.Printf("Failed: %s\n", err)
+				}
 			} else {
-				logger.Info.Printf("Failed: %s\n", err)
+				logger.Error.Printf("%s", err)
 			}
 		} else {
 			logger.Info.Printf("Get %s\n", opts.Parameter)
 			val, err := dpm.GetValue(opts.Parameter)
 			if err == nil {
-				logger.Info.Printf("%s = %X\n", opts.Parameter, val)
+				logger.Info.Printf("%s = %s\n", val.Name, val)
 			} else {
 				logger.Info.Printf("Failed: %s\n", err)
 			}

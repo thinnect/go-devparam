@@ -49,7 +49,7 @@ func TestDpm(t *testing.T) {
 	fmt.Printf("%v %v\n", v4, err)
 
 	dp.SetTimeout(time.Second)
-	err = dp.SetValue("radio_channel", []byte{11})
+	_, err = dp.SetValue("radio_channel", []byte{11})
 	fmt.Printf("s %v\n", err)
 
 	dp.Close()

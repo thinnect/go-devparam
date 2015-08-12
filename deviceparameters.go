@@ -91,7 +91,7 @@ func (self *DeviceParameterManager) SetRetries(retries int) {
 	self.retries = retries
 }
 
-func (self *DeviceParameterManager) GetValue(name string) ([]byte, error) {
+func (self *DeviceParameterManager) GetValue(name string) (*DeviceParameter, error) {
 	// Interrupt the run goroutine
 	self.done <- true
 
@@ -110,7 +110,7 @@ func (self *DeviceParameterManager) GetValue(name string) ([]byte, error) {
 		dp, err := self.waitValueId(name)
 		if err == nil {
 			go self.run()
-			return dp.Value, nil
+			return dp, nil
 		} else {
 			result = err
 			if _, ok := err.(*ParameterError); ok {
@@ -123,7 +123,7 @@ func (self *DeviceParameterManager) GetValue(name string) ([]byte, error) {
 	return nil, result
 }
 
-func (self *DeviceParameterManager) SetValue(name string, value []byte) error {
+func (self *DeviceParameterManager) SetValue(name string, value []byte) (*DeviceParameter, error) {
 	// Interrupt the run goroutine
 	self.done <- true
 
@@ -146,7 +146,7 @@ func (self *DeviceParameterManager) SetValue(name string, value []byte) error {
 				// store in values table
 				self.values[name] = dp
 				go self.run()
-				return nil
+				return dp, nil
 			} else {
 				result = errors.New(fmt.Sprintf("Returned value %X does not match set value %X!", dp.Value, value))
 			}
@@ -159,7 +159,7 @@ func (self *DeviceParameterManager) SetValue(name string, value []byte) error {
 	}
 
 	go self.run()
-	return result
+	return nil, result
 }
 
 func (self *DeviceParameterManager) GetList() (chan *DeviceParameter, error) {
