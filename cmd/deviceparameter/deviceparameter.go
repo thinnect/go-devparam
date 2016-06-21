@@ -19,45 +19,78 @@ import "github.com/thinnect/go-devparam"
 
 const ApplicationVersionMajor = 0
 const ApplicationVersionMinor = 1
-const ApplicationVersionPatch = 0
+const ApplicationVersionPatch = 1
 
 var ApplicationBuildDate string
 var ApplicationBuildDistro string
 
-type HexString []byte
-
-func (self *HexString) UnmarshalFlag(value string) error {
-	data, err := hex.DecodeString(value)
-	*self = data
-	return err
-}
-
-func (self HexString) MarshalFlag() (string, error) {
-	return hex.EncodeToString(self), nil
-}
-
 func parseValue(opts Options) ([]byte, error) {
-	buf := new(bytes.Buffer)
+	var t interface{}
 	if opts.Uint8 {
-		if v, err := strconv.ParseUint(opts.Value, 10, 8); err != nil {
-			return nil, err
-		} else if err = binary.Write(buf, binary.BigEndian, uint8(v)); err != nil {
+		if v, err := strconv.ParseUint(opts.Value, 10, 8); err == nil {
+			t = uint8(v)
+		} else {
 			return nil, err
 		}
-		return buf.Bytes(), nil
 	} else if opts.Uint16 {
-		if v, err := strconv.ParseUint(opts.Value, 10, 16); err != nil {
-			return nil, err
-		} else if err = binary.Write(buf, binary.BigEndian, uint16(v)); err != nil {
+		if v, err := strconv.ParseUint(opts.Value, 10, 16); err == nil {
+			t = uint16(v)
+		} else {
 			return nil, err
 		}
 	} else if opts.Uint32 {
-		if v, err := strconv.ParseUint(opts.Value, 10, 32); err != nil {
+		if v, err := strconv.ParseUint(opts.Value, 10, 32); err == nil {
+			t = uint32(v)
+		} else {
 			return nil, err
-		} else if err = binary.Write(buf, binary.BigEndian, uint32(v)); err != nil {
+		}
+	} else if opts.Uint64 {
+		if v, err := strconv.ParseUint(opts.Value, 10, 64); err == nil {
+			t = uint64(v)
+		} else {
+			return nil, err
+		}
+	} else if opts.Int8 {
+		if v, err := strconv.ParseInt(opts.Value, 10, 8); err == nil {
+			t = int8(v)
+		} else {
+			return nil, err
+		}
+	} else if opts.Int16 {
+		if v, err := strconv.ParseInt(opts.Value, 10, 16); err == nil {
+			t = int16(v)
+		} else {
+			return nil, err
+		}
+	} else if opts.Int32 {
+		if v, err := strconv.ParseInt(opts.Value, 10, 32); err == nil {
+			t = int32(v)
+		} else {
+			return nil, err
+		}
+	} else if opts.Int64 {
+		if v, err := strconv.ParseInt(opts.Value, 10, 64); err == nil {
+			t = int64(v)
+		} else {
 			return nil, err
 		}
 	}
+
+	if t != nil {
+		switch t := t.(type) {
+		case uint8, uint16, uint32, uint64, int8, int16, int32, int64:
+			buf := new(bytes.Buffer)
+			if err := binary.Write(buf, binary.BigEndian, t); err != nil {
+				return nil, err
+			}
+			return buf.Bytes(), nil
+		}
+	}
+
+	if opts.String {
+		return []byte(opts.Value), nil
+	}
+
 	return hex.DecodeString(opts.Value)
 }
 
@@ -70,9 +103,16 @@ type Options struct {
 
 	Parameter string `short:"p" long:"parameter" description:"Name of the parameter"`
 	Value     string `short:"v" long:"value"     description:"Value to set"`
-	Uint8     bool   `long:"uint8"  description:"Value is uint8"`
-	Uint16    bool   `long:"uint16" description:"Value is uint16"`
-	Uint32    bool   `long:"uint32" description:"Value is uint32"`
+
+	String bool `long:"string" description:"Value is string"`
+	Uint8  bool `long:"uint8"  description:"Value is uint8"`
+	Uint16 bool `long:"uint16" description:"Value is uint16"`
+	Uint32 bool `long:"uint32" description:"Value is uint32"`
+	Uint64 bool `long:"uint64" description:"Value is uint64"`
+	Int8   bool `long:"int8"   description:"Value is int8"`
+	Int16  bool `long:"int16"  description:"Value is int16"`
+	Int32  bool `long:"int32"  description:"Value is int32"`
+	Int64  bool `long:"int64"  description:"Value is int64"`
 
 	Debug       []bool `short:"D" long:"debug"   description:"Debug mode, print raw packets"`
 	ShowVersion func() `short:"V" long:"version" description:"Show application version"`
