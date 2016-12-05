@@ -99,7 +99,9 @@ type Options struct {
 		ConnectionString string `description:"Connectionstring sf@HOST:PORT"`
 	} `positional-args:"yes"`
 
-	Group sfconnection.AMGroup `short:"g" long:"group" default:"22" description:"Packet AM Group (hex)"`
+	Group       sfconnection.AMGroup `short:"g" long:"group" default:"22" description:"Packet AM Group (hex)"`
+	Address     sfconnection.AMAddr  `short:"a" long:"address" default:"5678" description:"Source AM address (hex)"`
+	Destination sfconnection.AMAddr  `short:"d" long:"destination" default:"0" description:"Destination AM address (hex)"`
 
 	Parameter string `short:"p" long:"parameter" description:"Name of the parameter"`
 	Value     string `short:"v" long:"value"     description:"Value to set"`
@@ -145,7 +147,13 @@ func main() {
 	}
 
 	sfc := sfconnection.NewSfConnection()
-	dpm := deviceparameters.NewDeviceParameterManager(sfc)
+
+	var dpm *deviceparameters.DeviceParameterManager = nil
+	if opts.Destination == 0 {
+		dpm = deviceparameters.NewDeviceParameterManager(sfc)
+	} else {
+		dpm = deviceparameters.NewDeviceParameterActiveMessageManager(sfc, opts.Group, opts.Address, opts.Destination)
+	}
 
 	logger := logsetup(len(opts.Debug))
 	if len(opts.Debug) > 0 {

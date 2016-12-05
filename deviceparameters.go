@@ -40,7 +40,7 @@ const TOS_SERIAL_DEVICE_PARAMETERS_ID = 0x80
 type DeviceParameterManager struct {
 	loggers.DIWEloggers
 	sfc *sfconnection.SfConnection
-	dsp *sfconnection.PacketDispatcher
+	dsp sfconnection.Dispatcher
 
 	values    map[string]*DeviceParameter
 	devstart  time.Time
@@ -50,6 +50,8 @@ type DeviceParameterManager struct {
 	retries int
 
 	receive chan sfconnection.Packet
+
+	destination sfconnection.AMAddr // Optional destination
 
 	done   chan bool
 	closed bool
@@ -73,8 +75,31 @@ func NewDeviceParameterManager(sfc *sfconnection.SfConnection) *DeviceParameterM
 	dpm.timeout = time.Second
 	dpm.retries = 3
 
-	dpm.dsp = sfconnection.NewPacketDispatcher(sfconnection.NewRawPacket(TOS_SERIAL_DEVICE_PARAMETERS_ID))
-	dpm.dsp.RegisterReceiver(dpm.receive)
+	dsp := sfconnection.NewPacketDispatcher(sfconnection.NewRawPacket(TOS_SERIAL_DEVICE_PARAMETERS_ID))
+	dsp.RegisterReceiver(dpm.receive)
+	dpm.dsp = dsp
+
+	dpm.sfc = sfc
+	dpm.sfc.AddDispatcher(dpm.dsp)
+
+	go dpm.run()
+	return dpm
+}
+
+func NewDeviceParameterActiveMessageManager(sfc *sfconnection.SfConnection, group sfconnection.AMGroup, address sfconnection.AMAddr, destination sfconnection.AMAddr) *DeviceParameterManager {
+	dpm := new(DeviceParameterManager)
+	dpm.InitLoggers()
+	dpm.values = make(map[string]*DeviceParameter)
+	dpm.done = make(chan bool)
+	dpm.closed = false
+	dpm.receive = make(chan sfconnection.Packet)
+	dpm.timeout = time.Second
+	dpm.retries = 3
+	dpm.destination = destination
+
+	dsp := sfconnection.NewMessageDispatcher(sfconnection.NewMessage(group, address))
+	dsp.RegisterMessageReceiver(0x80, dpm.receive)
+	dpm.dsp = dsp
 
 	dpm.sfc = sfc
 	dpm.sfc.AddDispatcher(dpm.dsp)
@@ -99,11 +124,15 @@ func (self *DeviceParameterManager) GetValue(name string) (*DeviceParameter, err
 
 	for retries := 0; retries <= self.retries; retries++ {
 		// Send get request
-		msg := self.dsp.NewPacket().(*sfconnection.RawPacket)
+		msg := self.dsp.NewPacket()
+		if self.destination != 0 {
+			msg.(*sfconnection.Message).SetDestination(self.destination)
+			msg.(*sfconnection.Message).SetType(0x80)
+		}
 		payload := new(DpGetParameterId)
 		payload.Header = DP_GET_PARAMETER_WITH_ID
 		payload.Id = name
-		msg.Payload = sfconnection.SerializePacket(payload)
+		msg.SetPayload(sfconnection.SerializePacket(payload))
 		self.sfc.Send(msg)
 
 		// Wait for value
@@ -131,12 +160,16 @@ func (self *DeviceParameterManager) SetValue(name string, value []byte) (*Device
 
 	for retries := 0; retries <= self.retries; retries++ {
 		// Send set request
-		msg := self.dsp.NewPacket().(*sfconnection.RawPacket)
+		msg := self.dsp.NewPacket()
+		if self.destination != 0 {
+			msg.(*sfconnection.Message).SetDestination(self.destination)
+			msg.(*sfconnection.Message).SetType(0x80)
+		}
 		payload := new(DpSetParameterId)
 		payload.Header = DP_SET_PARAMETER_WITH_ID
 		payload.Id = name
 		payload.Value = value
-		msg.Payload = sfconnection.SerializePacket(payload)
+		msg.SetPayload(sfconnection.SerializePacket(payload))
 		self.sfc.Send(msg)
 
 		// Wait for value
@@ -172,12 +205,13 @@ func (self *DeviceParameterManager) GetList() (chan *DeviceParameter, error) {
 	return delivery, nil
 }
 
-func (self *DeviceParameterManager) receivedPacket(msg *sfconnection.RawPacket) {
+func (self *DeviceParameterManager) receivedPacket(msg sfconnection.Packet) {
 	self.Debug.Printf("%s\n", msg)
-	if len(msg.Payload) > 0 {
-		if msg.Payload[0] == DP_HEARTBEAT {
+	payload := msg.GetPayload()
+	if len(payload) > 0 {
+		if payload[0] == DP_HEARTBEAT {
 			p := new(DpHeartbeat)
-			if err := sfconnection.DeserializePacket(p, msg.Payload); err == nil {
+			if err := sfconnection.DeserializePacket(p, payload); err == nil {
 				self.heartbeat = time.Now()
 				self.devstart = self.heartbeat.Add(-time.Duration(p.Uptime) * time.Second)
 				// TODO check stuff
@@ -191,20 +225,20 @@ func (self *DeviceParameterManager) waitValueId(name string) (*DeviceParameter, 
 	for {
 		select {
 		case packet := <-self.receive:
-			msg := packet.(*sfconnection.RawPacket)
-			if len(msg.Payload) > 0 {
-				if msg.Payload[0] == DP_PARAMETER {
+			payload := packet.GetPayload()
+			if len(payload) > 0 {
+				if payload[0] == DP_PARAMETER {
 					p := new(DpParameter)
-					if err := sfconnection.DeserializePacket(p, msg.Payload); err == nil {
+					if err := sfconnection.DeserializePacket(p, payload); err == nil {
 						if p.Id == name {
 							return &DeviceParameter{name, p.Type, p.Seqnum, p.Value, time.Now(), nil}, nil
 						}
 					} else {
-						self.Error.Printf("Deserialize error %s %s\n", err, msg)
+						self.Error.Printf("Deserialize error %s %s\n", err, packet)
 					}
-				} else if msg.Payload[0] == DP_ERROR_PARAMETER_ID {
+				} else if payload[0] == DP_ERROR_PARAMETER_ID {
 					p := new(DpErrorParameterId)
-					if err := sfconnection.DeserializePacket(p, msg.Payload); err == nil {
+					if err := sfconnection.DeserializePacket(p, payload); err == nil {
 						if p.Id == name {
 							if p.Exists {
 								return nil, errors.New(fmt.Sprintf("Something went wrong with parameter \"%s\", error %d!", name, p.Err))
@@ -215,10 +249,10 @@ func (self *DeviceParameterManager) waitValueId(name string) (*DeviceParameter, 
 							self.Warning.Printf("Received unexpected error for parameter %s\n", p.Id)
 						}
 					} else {
-						self.Error.Printf("Deserialize error %s %s\n", err, msg)
+						self.Error.Printf("Deserialize error %s %s\n", err, packet)
 					}
 				} else {
-					self.receivedPacket(msg)
+					self.receivedPacket(packet)
 				}
 			}
 		case <-time.After(remaining(start, self.timeout)):
@@ -232,20 +266,20 @@ func (self *DeviceParameterManager) waitValueSeqnum(seqnum uint8) (*DeviceParame
 	for {
 		select {
 		case packet := <-self.receive:
-			msg := packet.(*sfconnection.RawPacket)
-			if len(msg.Payload) > 0 {
-				if msg.Payload[0] == DP_PARAMETER {
+			payload := packet.GetPayload()
+			if len(payload) > 0 {
+				if payload[0] == DP_PARAMETER {
 					p := new(DpParameter)
-					if err := sfconnection.DeserializePacket(p, msg.Payload); err == nil {
+					if err := sfconnection.DeserializePacket(p, payload); err == nil {
 						if p.Seqnum == seqnum {
 							return &DeviceParameter{p.Id, p.Type, p.Seqnum, p.Value, time.Now(), nil}, nil
 						}
 					} else {
-						self.Error.Printf("Deserialize error %s %s\n", err, msg)
+						self.Error.Printf("Deserialize error %s %s\n", err, packet)
 					}
-				} else if msg.Payload[0] == DP_ERROR_PARAMETER_SEQNUM {
+				} else if payload[0] == DP_ERROR_PARAMETER_SEQNUM {
 					p := new(DpErrorParameterSeqnum)
-					if err := sfconnection.DeserializePacket(p, msg.Payload); err == nil {
+					if err := sfconnection.DeserializePacket(p, payload); err == nil {
 						if p.Seqnum == seqnum {
 							if p.Exists {
 								return nil, errors.New(fmt.Sprintf("Something went wrong with parameter %d, error %d!", seqnum, p.Err))
@@ -256,10 +290,10 @@ func (self *DeviceParameterManager) waitValueSeqnum(seqnum uint8) (*DeviceParame
 							self.Warning.Printf("Received unexpected error for parameter %d\n", p.Seqnum)
 						}
 					} else {
-						self.Error.Printf("Deserialize error %s %s\n", err, msg)
+						self.Error.Printf("Deserialize error %s %s\n", err, packet)
 					}
 				} else {
-					self.receivedPacket(msg)
+					self.receivedPacket(packet)
 				}
 			}
 		case <-time.After(remaining(start, self.timeout)):
@@ -273,11 +307,15 @@ func (self *DeviceParameterManager) getList(delivery chan *DeviceParameter) {
 		for retries := 0; retries <= self.retries; retries++ {
 			self.Debug.Printf("Get %d %d/%d\n", i, retries, self.retries)
 			// Send get request
-			msg := self.dsp.NewPacket().(*sfconnection.RawPacket)
+			msg := self.dsp.NewPacket()
+			if self.destination != 0 {
+				msg.(*sfconnection.Message).SetDestination(self.destination)
+				msg.(*sfconnection.Message).SetType(0x80)
+			}
 			payload := new(DpGetParameterSeqnum)
 			payload.Header = DP_GET_PARAMETER_WITH_SEQNUM
 			payload.Seqnum = uint8(i)
-			msg.Payload = sfconnection.SerializePacket(payload)
+			msg.SetPayload(sfconnection.SerializePacket(payload))
 			self.sfc.Send(msg)
 
 			// Wait for value
@@ -309,7 +347,7 @@ func (self *DeviceParameterManager) run() {
 	for {
 		select {
 		case packet := <-self.receive:
-			msg := packet.(*sfconnection.RawPacket)
+			msg := packet
 			self.receivedPacket(msg)
 		case done := <-self.done:
 			if done {
