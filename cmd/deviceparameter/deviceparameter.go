@@ -103,6 +103,9 @@ type Options struct {
 	Address     sfconnection.AMAddr  `short:"a" long:"address" default:"5678" description:"Source AM address (hex)"`
 	Destination sfconnection.AMAddr  `short:"d" long:"destination" default:"0" description:"Destination AM address (hex)"`
 
+	Timeout int `long:"timeout" default:"1" description:"Get/set action timeout (seconds)"`
+	Retries int `long:"retries" default:"3" description:"Get/set action retries"`
+
 	Parameter string `short:"p" long:"parameter" description:"Name of the parameter"`
 	Value     string `short:"v" long:"value"     description:"Value to set"`
 
@@ -154,6 +157,8 @@ func main() {
 	} else {
 		dpm = deviceparameters.NewDeviceParameterActiveMessageManager(sfc, opts.Group, opts.Address, opts.Destination)
 	}
+	dpm.SetTimeout(time.Duration(opts.Timeout) * time.Second)
+	dpm.SetRetries(opts.Retries)
 
 	logger := logsetup(len(opts.Debug))
 	if len(opts.Debug) > 0 {
@@ -198,9 +203,9 @@ func main() {
 			param := <-pchan
 			for ; param != nil; param = <-pchan {
 				if param.Error == nil {
-					logger.Info.Printf("%d: %s %s\n", param.Seqnum, param.Name, param)
+					logger.Info.Printf("%2d: %s %s\n", param.Seqnum, param.Name, param)
 				} else {
-					logger.Info.Printf("%d: %s\n", param.Seqnum, param.Error)
+					logger.Info.Printf("%2d: %s\n", param.Seqnum, param.Error)
 				}
 			}
 		} else {
