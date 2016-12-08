@@ -36,6 +36,7 @@ const (
 )
 
 const TOS_SERIAL_DEVICE_PARAMETERS_ID = 0x80
+const AMID_DEVICE_PARAMETERS = 0x82
 
 type DeviceParameterManager struct {
 	loggers.DIWEloggers
@@ -98,7 +99,7 @@ func NewDeviceParameterActiveMessageManager(sfc *sfconnection.SfConnection, grou
 	dpm.destination = destination
 
 	dsp := sfconnection.NewMessageDispatcher(sfconnection.NewMessage(group, address))
-	dsp.RegisterMessageReceiver(0x80, dpm.receive)
+	dsp.RegisterMessageReceiver(AMID_DEVICE_PARAMETERS, dpm.receive)
 	dpm.dsp = dsp
 
 	dpm.sfc = sfc
@@ -127,7 +128,7 @@ func (self *DeviceParameterManager) GetValue(name string) (*DeviceParameter, err
 		msg := self.dsp.NewPacket()
 		if self.destination != 0 {
 			msg.(*sfconnection.Message).SetDestination(self.destination)
-			msg.(*sfconnection.Message).SetType(0x80)
+			msg.(*sfconnection.Message).SetType(AMID_DEVICE_PARAMETERS)
 		}
 		payload := new(DpGetParameterId)
 		payload.Header = DP_GET_PARAMETER_WITH_ID
@@ -163,7 +164,7 @@ func (self *DeviceParameterManager) SetValue(name string, value []byte) (*Device
 		msg := self.dsp.NewPacket()
 		if self.destination != 0 {
 			msg.(*sfconnection.Message).SetDestination(self.destination)
-			msg.(*sfconnection.Message).SetType(0x80)
+			msg.(*sfconnection.Message).SetType(AMID_DEVICE_PARAMETERS)
 		}
 		payload := new(DpSetParameterId)
 		payload.Header = DP_SET_PARAMETER_WITH_ID
@@ -310,7 +311,7 @@ func (self *DeviceParameterManager) getList(delivery chan *DeviceParameter) {
 			msg := self.dsp.NewPacket()
 			if self.destination != 0 {
 				msg.(*sfconnection.Message).SetDestination(self.destination)
-				msg.(*sfconnection.Message).SetType(0x80)
+				msg.(*sfconnection.Message).SetType(AMID_DEVICE_PARAMETERS)
 			}
 			payload := new(DpGetParameterSeqnum)
 			payload.Header = DP_GET_PARAMETER_WITH_SEQNUM
