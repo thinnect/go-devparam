@@ -106,8 +106,8 @@ type Options struct {
 	Timeout int `long:"timeout" default:"1" description:"Get/set action timeout (seconds)"`
 	Retries int `long:"retries" default:"3" description:"Get/set action retries"`
 
-	Parameter string `short:"p" long:"parameter" description:"Name of the parameter"`
-	Value     string `short:"v" long:"value"     description:"Value to set"`
+	Parameter []string `short:"p" long:"parameter" description:"List of parameter names"`
+	Value     string   `short:"v" long:"value"     description:"Value to set (single parameter only)"`
 
 	String bool `long:"string" description:"Value is string"`
 	Uint8  bool `long:"uint8"  description:"Value is uint8"`
@@ -120,6 +120,7 @@ type Options struct {
 	Int64  bool `long:"int64"  description:"Value is int64"`
 
 	Debug       []bool `short:"D" long:"debug"   description:"Debug mode, print raw packets"`
+	Quiet       []bool `short:"Q" long:"quiet"   description:"Quiet mode, print only values"`
 	ShowVersion func() `short:"V" long:"version" description:"Show application version"`
 }
 
@@ -172,28 +173,34 @@ func main() {
 		logger.Error.Printf("Unable to connect to %s:%d\n", host, port)
 		os.Exit(1)
 	}
-	logger.Info.Printf("Connected to %s:%d\n", host, port)
+	if len(opts.Quiet) == 0 {
+		logger.Info.Printf("Connected to %s:%d\n", host, port)
+	}
 
 	if len(opts.Parameter) > 0 {
-		if len(opts.Value) > 0 {
+		if len(opts.Value) == 0 || len(opts.Parameter) > 1 {
+			for _, parameter := range opts.Parameter {
+				if len(opts.Quiet) == 0 {
+					logger.Info.Printf("Get %s\n", parameter)
+				}
+				val, err := dpm.GetValue(parameter)
+				if err == nil {
+					logger.Info.Printf("%s = %s\n", val.Name, val)
+				} else {
+					logger.Info.Printf("Failed: %s\n", err)
+				}
+			}
+		} else { // Set only if value and only a single parameter
 			value, err := parseValue(opts)
 			if err == nil {
-				logger.Info.Printf("Set %s to 0x%X\n", opts.Parameter, value)
-				if val, err := dpm.SetValue(opts.Parameter, value); err == nil {
+				logger.Info.Printf("Set %s to 0x%X\n", opts.Parameter[0], value)
+				if val, err := dpm.SetValue(opts.Parameter[0], value); err == nil {
 					logger.Info.Printf("%s = %s\n", val.Name, val)
 				} else {
 					logger.Info.Printf("Failed: %s\n", err)
 				}
 			} else {
 				logger.Error.Printf("%s", err)
-			}
-		} else {
-			logger.Info.Printf("Get %s\n", opts.Parameter)
-			val, err := dpm.GetValue(opts.Parameter)
-			if err == nil {
-				logger.Info.Printf("%s = %s\n", val.Name, val)
-			} else {
-				logger.Info.Printf("Failed: %s\n", err)
 			}
 		}
 	} else {
