@@ -19,7 +19,7 @@ import "github.com/thinnect/go-devparam"
 
 const ApplicationVersionMajor = 0
 const ApplicationVersionMinor = 1
-const ApplicationVersionPatch = 1
+const ApplicationVersionPatch = 2
 
 var ApplicationBuildDate string
 var ApplicationBuildDistro string
