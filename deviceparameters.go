@@ -227,6 +227,15 @@ func (self *DeviceParameterManager) waitValueId(name string) (*DeviceParameter, 
 		select {
 		case packet := <-self.receive:
 			payload := packet.GetPayload()
+
+			if self.destination != 0 {
+				msg, ok := packet.(*sfconnection.Message)
+				if !ok || msg.Source() != self.destination {
+					self.Debug.Printf("Ignoring packet %s\n", packet)
+					payload = nil
+				}
+			}
+
 			if len(payload) > 0 {
 				if payload[0] == DP_PARAMETER {
 					p := new(DpParameter)

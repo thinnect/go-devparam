@@ -19,7 +19,7 @@ import "github.com/thinnect/go-devparam"
 
 const ApplicationVersionMajor = 0
 const ApplicationVersionMinor = 1
-const ApplicationVersionPatch = 2
+const ApplicationVersionPatch = 3
 
 var ApplicationBuildDate string
 var ApplicationBuildDistro string
@@ -177,6 +177,8 @@ func main() {
 		logger.Info.Printf("Connected to %s:%d\n", host, port)
 	}
 
+	success := false
+
 	if len(opts.Parameter) > 0 {
 		if len(opts.Value) == 0 || len(opts.Parameter) > 1 {
 			for _, parameter := range opts.Parameter {
@@ -186,6 +188,7 @@ func main() {
 				val, err := dpm.GetValue(parameter)
 				if err == nil {
 					logger.Info.Printf("%s = %s\n", val.Name, val)
+					success = true
 				} else {
 					logger.Info.Printf("Failed: %s\n", err)
 				}
@@ -196,6 +199,7 @@ func main() {
 				logger.Info.Printf("Set %s to 0x%X\n", opts.Parameter[0], value)
 				if val, err := dpm.SetValue(opts.Parameter[0], value); err == nil {
 					logger.Info.Printf("%s = %s\n", val.Name, val)
+					success = true
 				} else {
 					logger.Info.Printf("Failed: %s\n", err)
 				}
@@ -215,6 +219,7 @@ func main() {
 					logger.Info.Printf("%2d: %s\n", param.Seqnum, param.Error)
 				}
 			}
+			success = true
 		} else {
 			logger.Info.Printf("Failed: %s\n", err)
 		}
@@ -223,6 +228,12 @@ func main() {
 	dpm.Close()
 	sfc.Disconnect()
 	time.Sleep(100 * time.Millisecond)
+
+	if success {
+		os.Exit(0)
+	} else {
+		os.Exit(1)
+	}
 }
 
 func logsetup(debuglevel int) *loggers.DIWEloggers {
