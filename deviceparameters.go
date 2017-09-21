@@ -10,7 +10,7 @@ import "bytes"
 import "encoding/binary"
 
 import "github.com/proactivity-lab/go-loggers"
-import "github.com/proactivity-lab/go-sfconnection"
+import "github.com/proactivity-lab/go-moteconnection"
 
 type DeviceParameter struct {
 	Name      string
@@ -40,8 +40,8 @@ const AMID_DEVICE_PARAMETERS = 0x82
 
 type DeviceParameterManager struct {
 	loggers.DIWEloggers
-	sfc *sfconnection.SfConnection
-	dsp sfconnection.Dispatcher
+	sfc moteconnection.MoteConnection
+	dsp moteconnection.Dispatcher
 
 	values    map[string]*DeviceParameter
 	devstart  time.Time
@@ -50,9 +50,9 @@ type DeviceParameterManager struct {
 	timeout time.Duration
 	retries int
 
-	receive chan sfconnection.Packet
+	receive chan moteconnection.Packet
 
-	destination sfconnection.AMAddr // Optional destination
+	destination moteconnection.AMAddr // Optional destination
 
 	done   chan bool
 	closed bool
@@ -66,17 +66,17 @@ func NewParameterError(text string) error { return &ParameterError{text} }
 func (self TimeoutError) Error() string   { return self.s }
 func NewTimeoutError(text string) error   { return &TimeoutError{text} }
 
-func NewDeviceParameterManager(sfc *sfconnection.SfConnection) *DeviceParameterManager {
+func NewDeviceParameterManager(sfc moteconnection.MoteConnection) *DeviceParameterManager {
 	dpm := new(DeviceParameterManager)
 	dpm.InitLoggers()
 	dpm.values = make(map[string]*DeviceParameter)
 	dpm.done = make(chan bool)
 	dpm.closed = false
-	dpm.receive = make(chan sfconnection.Packet)
+	dpm.receive = make(chan moteconnection.Packet)
 	dpm.timeout = time.Second
 	dpm.retries = 3
 
-	dsp := sfconnection.NewPacketDispatcher(sfconnection.NewRawPacket(TOS_SERIAL_DEVICE_PARAMETERS_ID))
+	dsp := moteconnection.NewPacketDispatcher(moteconnection.NewRawPacket(TOS_SERIAL_DEVICE_PARAMETERS_ID))
 	dsp.RegisterReceiver(dpm.receive)
 	dpm.dsp = dsp
 
@@ -87,18 +87,18 @@ func NewDeviceParameterManager(sfc *sfconnection.SfConnection) *DeviceParameterM
 	return dpm
 }
 
-func NewDeviceParameterActiveMessageManager(sfc *sfconnection.SfConnection, group sfconnection.AMGroup, address sfconnection.AMAddr, destination sfconnection.AMAddr) *DeviceParameterManager {
+func NewDeviceParameterActiveMessageManager(sfc moteconnection.MoteConnection, group moteconnection.AMGroup, address moteconnection.AMAddr, destination moteconnection.AMAddr) *DeviceParameterManager {
 	dpm := new(DeviceParameterManager)
 	dpm.InitLoggers()
 	dpm.values = make(map[string]*DeviceParameter)
 	dpm.done = make(chan bool)
 	dpm.closed = false
-	dpm.receive = make(chan sfconnection.Packet)
+	dpm.receive = make(chan moteconnection.Packet)
 	dpm.timeout = time.Second
 	dpm.retries = 3
 	dpm.destination = destination
 
-	dsp := sfconnection.NewMessageDispatcher(sfconnection.NewMessage(group, address))
+	dsp := moteconnection.NewMessageDispatcher(moteconnection.NewMessage(group, address))
 	dsp.RegisterMessageReceiver(AMID_DEVICE_PARAMETERS, dpm.receive)
 	dpm.dsp = dsp
 
@@ -127,13 +127,13 @@ func (self *DeviceParameterManager) GetValue(name string) (*DeviceParameter, err
 		// Send get request
 		msg := self.dsp.NewPacket()
 		if self.destination != 0 {
-			msg.(*sfconnection.Message).SetDestination(self.destination)
-			msg.(*sfconnection.Message).SetType(AMID_DEVICE_PARAMETERS)
+			msg.(*moteconnection.Message).SetDestination(self.destination)
+			msg.(*moteconnection.Message).SetType(AMID_DEVICE_PARAMETERS)
 		}
 		payload := new(DpGetParameterId)
 		payload.Header = DP_GET_PARAMETER_WITH_ID
 		payload.Id = name
-		msg.SetPayload(sfconnection.SerializePacket(payload))
+		msg.SetPayload(moteconnection.SerializePacket(payload))
 		self.sfc.Send(msg)
 
 		// Wait for value
@@ -163,14 +163,14 @@ func (self *DeviceParameterManager) SetValue(name string, value []byte) (*Device
 		// Send set request
 		msg := self.dsp.NewPacket()
 		if self.destination != 0 {
-			msg.(*sfconnection.Message).SetDestination(self.destination)
-			msg.(*sfconnection.Message).SetType(AMID_DEVICE_PARAMETERS)
+			msg.(*moteconnection.Message).SetDestination(self.destination)
+			msg.(*moteconnection.Message).SetType(AMID_DEVICE_PARAMETERS)
 		}
 		payload := new(DpSetParameterId)
 		payload.Header = DP_SET_PARAMETER_WITH_ID
 		payload.Id = name
 		payload.Value = value
-		msg.SetPayload(sfconnection.SerializePacket(payload))
+		msg.SetPayload(moteconnection.SerializePacket(payload))
 		self.sfc.Send(msg)
 
 		// Wait for value
@@ -206,13 +206,13 @@ func (self *DeviceParameterManager) GetList() (chan *DeviceParameter, error) {
 	return delivery, nil
 }
 
-func (self *DeviceParameterManager) receivedPacket(msg sfconnection.Packet) {
+func (self *DeviceParameterManager) receivedPacket(msg moteconnection.Packet) {
 	self.Debug.Printf("%s\n", msg)
 	payload := msg.GetPayload()
 	if len(payload) > 0 {
 		if payload[0] == DP_HEARTBEAT {
 			p := new(DpHeartbeat)
-			if err := sfconnection.DeserializePacket(p, payload); err == nil {
+			if err := moteconnection.DeserializePacket(p, payload); err == nil {
 				self.heartbeat = time.Now()
 				self.devstart = self.heartbeat.Add(-time.Duration(p.Uptime) * time.Second)
 				// TODO check stuff
@@ -229,7 +229,7 @@ func (self *DeviceParameterManager) waitValueId(name string) (*DeviceParameter, 
 			payload := packet.GetPayload()
 
 			if self.destination != 0 {
-				msg, ok := packet.(*sfconnection.Message)
+				msg, ok := packet.(*moteconnection.Message)
 				if !ok || msg.Source() != self.destination {
 					self.Debug.Printf("Ignoring packet %s\n", packet)
 					payload = nil
@@ -239,7 +239,7 @@ func (self *DeviceParameterManager) waitValueId(name string) (*DeviceParameter, 
 			if len(payload) > 0 {
 				if payload[0] == DP_PARAMETER {
 					p := new(DpParameter)
-					if err := sfconnection.DeserializePacket(p, payload); err == nil {
+					if err := moteconnection.DeserializePacket(p, payload); err == nil {
 						if p.Id == name {
 							return &DeviceParameter{name, p.Type, p.Seqnum, p.Value, time.Now(), nil}, nil
 						}
@@ -248,7 +248,7 @@ func (self *DeviceParameterManager) waitValueId(name string) (*DeviceParameter, 
 					}
 				} else if payload[0] == DP_ERROR_PARAMETER_ID {
 					p := new(DpErrorParameterId)
-					if err := sfconnection.DeserializePacket(p, payload); err == nil {
+					if err := moteconnection.DeserializePacket(p, payload); err == nil {
 						if p.Id == name {
 							if p.Exists {
 								return nil, errors.New(fmt.Sprintf("Something went wrong with parameter \"%s\", error %d!", name, p.Err))
@@ -280,7 +280,7 @@ func (self *DeviceParameterManager) waitValueSeqnum(seqnum uint8) (*DeviceParame
 			if len(payload) > 0 {
 				if payload[0] == DP_PARAMETER {
 					p := new(DpParameter)
-					if err := sfconnection.DeserializePacket(p, payload); err == nil {
+					if err := moteconnection.DeserializePacket(p, payload); err == nil {
 						if p.Seqnum == seqnum {
 							return &DeviceParameter{p.Id, p.Type, p.Seqnum, p.Value, time.Now(), nil}, nil
 						}
@@ -289,7 +289,7 @@ func (self *DeviceParameterManager) waitValueSeqnum(seqnum uint8) (*DeviceParame
 					}
 				} else if payload[0] == DP_ERROR_PARAMETER_SEQNUM {
 					p := new(DpErrorParameterSeqnum)
-					if err := sfconnection.DeserializePacket(p, payload); err == nil {
+					if err := moteconnection.DeserializePacket(p, payload); err == nil {
 						if p.Seqnum == seqnum {
 							if p.Exists {
 								return nil, errors.New(fmt.Sprintf("Something went wrong with parameter %d, error %d!", seqnum, p.Err))
@@ -319,13 +319,13 @@ func (self *DeviceParameterManager) getList(delivery chan *DeviceParameter) {
 			// Send get request
 			msg := self.dsp.NewPacket()
 			if self.destination != 0 {
-				msg.(*sfconnection.Message).SetDestination(self.destination)
-				msg.(*sfconnection.Message).SetType(AMID_DEVICE_PARAMETERS)
+				msg.(*moteconnection.Message).SetDestination(self.destination)
+				msg.(*moteconnection.Message).SetType(AMID_DEVICE_PARAMETERS)
 			}
 			payload := new(DpGetParameterSeqnum)
 			payload.Header = DP_GET_PARAMETER_WITH_SEQNUM
 			payload.Seqnum = uint8(i)
-			msg.SetPayload(sfconnection.SerializePacket(payload))
+			msg.SetPayload(moteconnection.SerializePacket(payload))
 			self.sfc.Send(msg)
 
 			// Wait for value

@@ -7,6 +7,7 @@ import "fmt"
 import "os"
 import "log"
 import "time"
+import "errors"
 import "encoding/hex"
 import "encoding/binary"
 import "strconv"
@@ -14,63 +15,82 @@ import "bytes"
 
 import "github.com/jessevdk/go-flags"
 import "github.com/proactivity-lab/go-loggers"
-import "github.com/proactivity-lab/go-sfconnection"
+import "github.com/proactivity-lab/go-moteconnection"
 import "github.com/thinnect/go-devparam"
 
 const ApplicationVersionMajor = 0
-const ApplicationVersionMinor = 1
-const ApplicationVersionPatch = 3
+const ApplicationVersionMinor = 2
+const ApplicationVersionPatch = 0
 
 var ApplicationBuildDate string
 var ApplicationBuildDistro string
 
 func parseValue(opts Options) ([]byte, error) {
+	var value []byte
+	var err error
 	var t interface{}
-	if opts.Uint8 {
-		if v, err := strconv.ParseUint(opts.Value, 10, 8); err == nil {
+	c := 0
+
+	if len(opts.Uint8) > 0 {
+		if v, err := strconv.ParseUint(opts.Uint8, 10, 8); err == nil {
 			t = uint8(v)
+			c++
 		} else {
 			return nil, err
 		}
-	} else if opts.Uint16 {
-		if v, err := strconv.ParseUint(opts.Value, 10, 16); err == nil {
+	}
+	if len(opts.Uint16) > 0 {
+		if v, err := strconv.ParseUint(opts.Uint16, 10, 16); err == nil {
 			t = uint16(v)
+			c++
 		} else {
 			return nil, err
 		}
-	} else if opts.Uint32 {
-		if v, err := strconv.ParseUint(opts.Value, 10, 32); err == nil {
+	}
+	if len(opts.Uint32) > 0 {
+		if v, err := strconv.ParseUint(opts.Uint32, 10, 32); err == nil {
 			t = uint32(v)
+			c++
 		} else {
 			return nil, err
 		}
-	} else if opts.Uint64 {
-		if v, err := strconv.ParseUint(opts.Value, 10, 64); err == nil {
+	}
+	if len(opts.Uint64) > 0 {
+		if v, err := strconv.ParseUint(opts.Uint64, 10, 64); err == nil {
 			t = uint64(v)
+			c++
 		} else {
 			return nil, err
 		}
-	} else if opts.Int8 {
-		if v, err := strconv.ParseInt(opts.Value, 10, 8); err == nil {
+	}
+	if len(opts.Int8) > 0 {
+		if v, err := strconv.ParseInt(opts.Int8, 10, 8); err == nil {
 			t = int8(v)
+			c++
 		} else {
 			return nil, err
 		}
-	} else if opts.Int16 {
-		if v, err := strconv.ParseInt(opts.Value, 10, 16); err == nil {
+	}
+	if len(opts.Int16) > 0 {
+		if v, err := strconv.ParseInt(opts.Int16, 10, 16); err == nil {
 			t = int16(v)
+			c++
 		} else {
 			return nil, err
 		}
-	} else if opts.Int32 {
-		if v, err := strconv.ParseInt(opts.Value, 10, 32); err == nil {
+	}
+	if len(opts.Int32) > 0 {
+		if v, err := strconv.ParseInt(opts.Int32, 10, 32); err == nil {
 			t = int32(v)
+			c++
 		} else {
 			return nil, err
 		}
-	} else if opts.Int64 {
-		if v, err := strconv.ParseInt(opts.Value, 10, 64); err == nil {
+	}
+	if len(opts.Int64) > 0 {
+		if v, err := strconv.ParseInt(opts.Int64, 10, 64); err == nil {
 			t = int64(v)
+			c++
 		} else {
 			return nil, err
 		}
@@ -83,41 +103,51 @@ func parseValue(opts Options) ([]byte, error) {
 			if err := binary.Write(buf, binary.BigEndian, t); err != nil {
 				return nil, err
 			}
-			return buf.Bytes(), nil
+			value = buf.Bytes()
 		}
 	}
 
-	if opts.String {
-		return []byte(opts.Value), nil
+	if len(opts.Value) > 0 {
+		value, err = hex.DecodeString(opts.Value)
+		c++
 	}
 
-	return hex.DecodeString(opts.Value)
+	if len(opts.String) > 0 {
+		value = []byte(opts.String)
+		c++
+	}
+
+	if c > 1 {
+		return nil, errors.New("Multiple values specified for parameter!")
+	}
+
+	return value, err
 }
 
 type Options struct {
 	Positional struct {
-		ConnectionString string `description:"Connectionstring sf@HOST:PORT"`
+		ConnectionString string `description:"Connectionstring sf@HOST:PORT or serial@PORT:BAUD"`
 	} `positional-args:"yes"`
 
-	Group       sfconnection.AMGroup `short:"g" long:"group" default:"22" description:"Packet AM Group (hex)"`
-	Address     sfconnection.AMAddr  `short:"a" long:"address" default:"5678" description:"Source AM address (hex)"`
-	Destination sfconnection.AMAddr  `short:"d" long:"destination" default:"0" description:"Destination AM address (hex)"`
+	Group       moteconnection.AMGroup `short:"g" long:"group" default:"22" description:"Packet AM Group (hex)"`
+	Address     moteconnection.AMAddr  `short:"a" long:"address" default:"5678" description:"Source AM address (hex)"`
+	Destination moteconnection.AMAddr  `short:"d" long:"destination" default:"0" description:"Destination AM address (hex)"`
 
 	Timeout int `long:"timeout" default:"1" description:"Get/set action timeout (seconds)"`
 	Retries int `long:"retries" default:"3" description:"Get/set action retries"`
 
 	Parameter []string `short:"p" long:"parameter" description:"List of parameter names"`
-	Value     string   `short:"v" long:"value"     description:"Value to set (single parameter only)"`
 
-	String bool `long:"string" description:"Value is string"`
-	Uint8  bool `long:"uint8"  description:"Value is uint8"`
-	Uint16 bool `long:"uint16" description:"Value is uint16"`
-	Uint32 bool `long:"uint32" description:"Value is uint32"`
-	Uint64 bool `long:"uint64" description:"Value is uint64"`
-	Int8   bool `long:"int8"   description:"Value is int8"`
-	Int16  bool `long:"int16"  description:"Value is int16"`
-	Int32  bool `long:"int32"  description:"Value is int32"`
-	Int64  bool `long:"int64"  description:"Value is int64"`
+	Value  string `short:"v" long:"value"     description:"Set value, presented as a raw hex buffer"`
+	String string `long:"str" description:"Set value, type is string"`
+	Uint8  string `long:"u8"  description:"Set value, type is uint8"`
+	Uint16 string `long:"u16" description:"Set value, type is uint16"`
+	Uint32 string `long:"u32" description:"Set value, type is uint32"`
+	Uint64 string `long:"u64" description:"Set value, type is uint64"`
+	Int8   string `long:"i8"  description:"Set value, type is int8"`
+	Int16  string `long:"i16" description:"Set value, type is int16"`
+	Int32  string `long:"i32" description:"Set value, type is int32"`
+	Int64  string `long:"i64" description:"Set value, type is int64"`
 
 	Debug       []bool `short:"D" long:"debug"   description:"Debug mode, print raw packets"`
 	Quiet       []bool `short:"Q" long:"quiet"   description:"Quiet mode, print only values"`
@@ -144,43 +174,45 @@ func main() {
 		os.Exit(1)
 	}
 
-	host, port, err := sfconnection.ParseSfConnectionString(opts.Positional.ConnectionString)
+	conn, cs, err := moteconnection.CreateConnection(opts.Positional.ConnectionString)
 	if err != nil {
 		fmt.Printf("ERROR: %s\n", err)
 		os.Exit(1)
 	}
 
-	sfc := sfconnection.NewSfConnection()
-
 	var dpm *deviceparameters.DeviceParameterManager = nil
 	if opts.Destination == 0 {
-		dpm = deviceparameters.NewDeviceParameterManager(sfc)
+		dpm = deviceparameters.NewDeviceParameterManager(conn)
 	} else {
-		dpm = deviceparameters.NewDeviceParameterActiveMessageManager(sfc, opts.Group, opts.Address, opts.Destination)
+		dpm = deviceparameters.NewDeviceParameterActiveMessageManager(conn, opts.Group, opts.Address, opts.Destination)
 	}
 	dpm.SetTimeout(time.Duration(opts.Timeout) * time.Second)
 	dpm.SetRetries(opts.Retries)
 
 	logger := logsetup(len(opts.Debug))
 	if len(opts.Debug) > 0 {
-		sfc.SetLoggers(logger)
+		conn.SetLoggers(logger)
 	}
 	dpm.SetLoggers(logger)
 
-	// Connect to the host
-	err = sfc.Connect(host, port)
+	err = conn.Connect()
 	if err != nil {
-		logger.Error.Printf("Unable to connect to %s:%d\n", host, port)
+		logger.Error.Printf("Unable to connect with %s: %s\n", cs, err)
 		os.Exit(1)
 	}
 	if len(opts.Quiet) == 0 {
-		logger.Info.Printf("Connected to %s:%d\n", host, port)
+		logger.Info.Printf("Connected with %s\n", cs)
 	}
 
 	success := false
 
 	if len(opts.Parameter) > 0 {
-		if len(opts.Value) == 0 || len(opts.Parameter) > 1 {
+		value, err := parseValue(opts)
+		if err != nil {
+			logger.Error.Printf("%s", err)
+		} else if value != nil && len(opts.Parameter) > 1 {
+			logger.Error.Printf("Value and multiple parameters provided\n")
+		} else if value == nil {
 			for _, parameter := range opts.Parameter {
 				if len(opts.Quiet) == 0 {
 					logger.Info.Printf("Get %s\n", parameter)
@@ -194,21 +226,18 @@ func main() {
 				}
 			}
 		} else { // Set only if value and only a single parameter
-			value, err := parseValue(opts)
-			if err == nil {
-				logger.Info.Printf("Set %s to 0x%X\n", opts.Parameter[0], value)
-				if val, err := dpm.SetValue(opts.Parameter[0], value); err == nil {
-					logger.Info.Printf("%s = %s\n", val.Name, val)
-					success = true
-				} else {
-					logger.Info.Printf("Failed: %s\n", err)
-				}
+			logger.Info.Printf("Set %s to 0x%X\n", opts.Parameter[0], value)
+			if val, err := dpm.SetValue(opts.Parameter[0], value); err == nil {
+				logger.Info.Printf("%s = %s\n", val.Name, val)
+				success = true
 			} else {
-				logger.Error.Printf("%s", err)
+				logger.Info.Printf("Failed: %s\n", err)
 			}
 		}
 	} else {
-		logger.Info.Printf("Get parameter list:\n")
+		if len(opts.Quiet) == 0 {
+			logger.Info.Printf("Get parameter list:\n")
+		}
 		pchan, err := dpm.GetList()
 		if err == nil {
 			param := <-pchan
@@ -226,10 +255,13 @@ func main() {
 	}
 
 	dpm.Close()
-	sfc.Disconnect()
+	conn.Disconnect()
 	time.Sleep(100 * time.Millisecond)
 
 	if success {
+		if len(opts.Quiet) == 0 {
+			logger.Info.Printf("Done")
+		}
 		os.Exit(0)
 	} else {
 		os.Exit(1)
