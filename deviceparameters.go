@@ -277,6 +277,15 @@ func (self *DeviceParameterManager) waitValueSeqnum(seqnum uint8) (*DeviceParame
 		select {
 		case packet := <-self.receive:
 			payload := packet.GetPayload()
+
+			if self.destination != 0 {
+				msg, ok := packet.(*moteconnection.Message)
+				if !ok || msg.Source() != self.destination {
+					self.Debug.Printf("Ignoring packet %s\n", packet)
+					payload = nil
+				}
+			}
+
 			if len(payload) > 0 {
 				if payload[0] == DP_PARAMETER {
 					p := new(DpParameter)
