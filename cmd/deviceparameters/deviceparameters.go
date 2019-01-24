@@ -37,6 +37,9 @@ type Options struct {
 	Group   moteconnection.AMGroup `short:"g" long:"group" default:"22" description:"Packet AM Group (hex)"`
 	Address moteconnection.AMAddr  `short:"a" long:"address" default:"5678" description:"Source AM address (hex)"`
 
+	Template string `short:"t" long:"template" default:"" description:"Template for activities."`
+	List     string `short:"l" long:"list" default:"" description:"List of nodes to apply the template for."`
+
 	Timeout int   `long:"timeout" default:"10" description:"Get/set action timeout (seconds)"`
 	Retries uint8 `long:"retries" default:"3" description:"Get/set action retries"`
 
@@ -86,18 +89,25 @@ func main() {
 	}
 	dpd.SetLoggers(logger)
 
-	err = conn.Connect()
-	//if err != nil {
-	logger.Error.Printf("Unable to connect with %s: %s\n", cs, err)
-	//os.Exit(1)
-	//}
+	conn.Autoconnect(10 * time.Second)
+
+	time.Sleep(5 * time.Second)
+
 	if len(opts.Quiet) == 0 {
-		logger.Info.Printf("Connected with %s\n", cs)
+		if conn.Connected() {
+			logger.Info.Printf("Connected with %s\n", cs)
+		} else {
+			logger.Info.Printf("Not (yet?) connected with %s\n", cs)
+		}
 	}
 
 	success := false
 
-	err = dpd.Start(opts.Positional.File)
+	if len(opts.Template) > 0 && len(opts.List) > 0 {
+		err = dpd.StartWithTemplate(opts.Positional.File, opts.Template, opts.List)
+	} else {
+		err = dpd.Start(opts.Positional.File)
+	}
 	if err != nil {
 		fmt.Printf("ERROR: %s\n", err)
 	} else {

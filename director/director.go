@@ -122,23 +122,39 @@ func (task *DeviceParameterTask) ToCSV() []string {
 	return []string{addr, task.Parameter, task.Type.String(), dv, av, task.Info}
 }
 
-func (dpd *DeviceParameterDirector) updateOutput() {
-	file, err := os.Create(dpd.filepath + ".new")
+func (dpd *DeviceParameterDirector) writeTasksToFile(tasks []DeviceParameterTask, filepath string) error {
+	file, err := os.Create(filepath)
 	if err == nil {
-		w := csv.NewWriter(file)
+		defer file.Close()
 
-		for _, task := range dpd.tasks {
+		w := csv.NewWriter(file)
+		defer w.Flush()
+
+		if err := w.Write([]string{"address", "parameter", "type", "desired", "actual", "info"}); err != nil {
+			dpd.Error.Printf("error writing header: %s", err)
+			return err
+		}
+
+		for _, task := range tasks {
 			if err := w.Write(task.ToCSV()); err != nil {
 				dpd.Error.Printf("error writing output: %s", err)
+				return err
 			}
 		}
 
-		w.Flush()
+		return nil
 	}
-	file.Close()
+	return err
+}
 
-	err = os.Rename(dpd.filepath+".new", dpd.filepath)
-	if err != nil {
+func (dpd *DeviceParameterDirector) updateOutput() {
+	newfile := dpd.filepath + ".new"
+	if err := dpd.writeTasksToFile(dpd.tasks, newfile); err == nil {
+		err = os.Rename(newfile, dpd.filepath)
+		if err != nil {
+			dpd.Error.Printf("error updating file: %s", err)
+		}
+	} else {
 		dpd.Error.Printf("error updating file: %s", err)
 	}
 }
@@ -258,16 +274,14 @@ func (dpd *DeviceParameterDirector) run() {
 	close(dpd.done)
 }
 
-func (dpd *DeviceParameterDirector) Start(filepath string) error {
-	// open and validate the file
-	dpd.filepath = filepath
-
-	dpd.tasks = make([]DeviceParameterTask, 0)
+func (dpd *DeviceParameterDirector) readTaskFile(filepath string) ([]DeviceParameterTask, error) {
+	tasks := make([]DeviceParameterTask, 0)
 
 	csvf, err := os.Open(filepath)
 	if err != nil {
-		return err
+		return nil, err
 	}
+	defer csvf.Close()
 
 	reader := csv.NewReader(bufio.NewReader(csvf))
 	//reader.LazyQuotes = true
@@ -282,7 +296,7 @@ func (dpd *DeviceParameterDirector) Start(filepath string) error {
 			break
 		} else if err != nil {
 			dpd.Error.Printf("%s", err)
-			return err
+			return nil, err
 		}
 
 		if line[0] == "address" {
@@ -300,25 +314,25 @@ func (dpd *DeviceParameterDirector) Start(filepath string) error {
 		// validate node address
 		addr64, err := strconv.ParseUint(line[0], 16, 16)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		addr := moteconnection.AMAddr(addr64)
 
 		if 0 < addr && addr < 0xFFFF {
 			task.Address = addr
 		} else {
-			return errors.New(fmt.Sprintf("'%s' is not a valid address!", line[0]))
+			return nil, errors.New(fmt.Sprintf("'%s' is not a valid address!", line[0]))
 		}
 		// validate parameter name
 		if 0 < len(line[1]) && len(line[1]) <= 16 {
 			task.Parameter = line[1]
 		} else {
-			return errors.New(fmt.Sprintf("'%s' is not a valid parameter name!", line[1]))
+			return nil, errors.New(fmt.Sprintf("'%s' is not a valid parameter name!", line[1]))
 		}
 		// validate parameter type
 		task.Type, err = dp.ParseDeviceParameterType(line[2])
 		if err != nil {
-			return err
+			return nil, err
 		}
 		// validate parameter desired value
 		if len(line[3]) == 0 {
@@ -326,7 +340,7 @@ func (dpd *DeviceParameterDirector) Start(filepath string) error {
 		} else {
 			task.Desired, err = dp.ParseParameterValue(task.Type, line[3])
 			if err != nil {
-				return errors.New(fmt.Sprintf("'%s' is not a valid parameter value!", line[3]))
+				return nil, errors.New(fmt.Sprintf("'%s' is not a valid parameter value!", line[3]))
 			}
 		}
 		// validate parameter actual value field
@@ -335,16 +349,52 @@ func (dpd *DeviceParameterDirector) Start(filepath string) error {
 		} else {
 			task.Actual, err = dp.ParseParameterValue(task.Type, line[4])
 			if err != nil {
-				return errors.New(fmt.Sprintf("'%s' is not a valid parameter value!", line[4]))
+				return nil, errors.New(fmt.Sprintf("'%s' is not a valid parameter value!", line[4]))
 			}
 		}
 		// validate the timestamp?
 		task.Info = line[5]
 
-		dpd.Debug.Printf("%+v\n", task)
+		// dpd.Debug.Printf("%+v\n", task)
 
-		dpd.tasks = append(dpd.tasks, task)
+		tasks = append(tasks, task)
 	}
+
+	return tasks, nil
+}
+
+func (dpd *DeviceParameterDirector) readNodeFile(filepath string) ([]moteconnection.AMAddr, error) {
+	nf, err := os.Open(filepath)
+	if err != nil {
+		return nil, err
+	}
+	defer nf.Close()
+
+	scanner := bufio.NewScanner(bufio.NewReader(nf))
+
+	nodes := make([]moteconnection.AMAddr, 0)
+	for scanner.Scan() {
+		t := strings.TrimSpace(scanner.Text())
+		if len(t) > 0 && strings.HasPrefix(t, "#") == false {
+			if addr, err := strconv.ParseUint(t, 16, 16); err == nil {
+				nodes = append(nodes, moteconnection.AMAddr(addr))
+			} else {
+				return nil, err
+			}
+		}
+	}
+	return nodes, nil
+}
+
+func (dpd *DeviceParameterDirector) Start(filepath string) error {
+	// open and validate the file
+	dpd.filepath = filepath
+
+	tasks, err := dpd.readTaskFile(filepath)
+	if err != nil {
+		return err
+	}
+	dpd.tasks = tasks
 
 	// setup sniffing dispatchers
 	// generate statistics for choosing next target?
@@ -354,6 +404,33 @@ func (dpd *DeviceParameterDirector) Start(filepath string) error {
 	go dpd.run()
 
 	return nil
+}
+
+func (dpd *DeviceParameterDirector) StartWithTemplate(filepath string, template string, nodelist string) error {
+	if _, err := os.Stat(filepath); err == nil {
+		dpd.Info.Printf("Task file exists, not using template.")
+	} else {
+		templateTasks, err := dpd.readTaskFile(template)
+		if err != nil {
+			return err
+		}
+
+		nodes, err := dpd.readNodeFile(nodelist)
+		if err != nil {
+			return err
+		}
+
+		tasks := make([]DeviceParameterTask, 0, len(nodes)*len(templateTasks))
+		for _, node := range nodes {
+			for _, task := range templateTasks {
+				task.Address = node
+				tasks = append(tasks, task)
+			}
+		}
+
+		dpd.writeTasksToFile(tasks, filepath)
+	}
+	return dpd.Start(filepath)
 }
 
 func (dpd *DeviceParameterDirector) Finished() bool {
