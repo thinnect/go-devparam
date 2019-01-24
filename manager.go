@@ -379,7 +379,7 @@ func (self *DeviceParameterManager) Close() error {
 	if !self.closed {
 		self.closed = true
 		close(self.done)
-		self.sfc.RemoveDispatcher(self.dsp.Dispatch())
+		self.sfc.RemoveDispatcher(self.dsp)
 		return nil
 	}
 	return errors.New("Close has already been called!")
