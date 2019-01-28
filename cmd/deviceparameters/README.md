@@ -68,7 +68,7 @@ and it will be updated according to the information received from the node.
 
   * `raw`:
     Values of the raw type are treated as hex strings and converted to binary.
-    The value must have a length that is devisible by 2 and only contain symbols
+    The value must have a length that is divisible by 2 and only contain symbols
     [0-9abcdef]. Value is not case sensitive.
   * `str`:
     String values are converted to binary using the ASCII encoding. For transmitting
@@ -82,13 +82,13 @@ and it will be updated according to the information received from the node.
   * `u64`:
     The value is converted to an unsigned 64-bit big-endian integer.
   * `i8`:
-    The value is converted to an signed 8-bit big-endian integer.
+    The value is converted to a signed 8-bit big-endian integer.
   * `i16`:
-    The value is converted to an signed 16-bit big-endian integer.
+    The value is converted to a signed 16-bit big-endian integer.
   * `i32`:
-    The value is converted to an signed 32-bit big-endian integer.
+    The value is converted to a signed 32-bit big-endian integer.
   * `i64`:
-    The value is converted to an signed 64-bit big-endian integer.
+    The value is converted to a signed 64-bit big-endian integer.
   * `nil`:
     The nil type can be used to set the length of variable length parameters
     (`raw` and `str`) to 0.
@@ -125,11 +125,11 @@ Options control connection parameters:
 
   * `-g`, `--group`:
   option is used to set the ActiveMessage group. The default is 22,
-the value is trated as a hex string (0x22).
+the value is parsed as a hex string (0x22).
 
   * `-a`, `--address`:
   option is used to set the source ActiveMessage address.
-  The default is 5678, the value is treated as a hex string (0x5678).
+  The default is 5678, the value is parsed as a hex string (0x5678).
 
 Options for controlling task processing timings:
 

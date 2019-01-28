@@ -9,12 +9,6 @@ import "log"
 import "time"
 import "os/signal"
 
-//import "errors"
-//import "encoding/hex"
-//import "encoding/binary"
-//import "strconv"
-//import "bytes"
-
 import "github.com/jessevdk/go-flags"
 import "github.com/proactivity-lab/go-loggers"
 import "github.com/proactivity-lab/go-moteconnection"
@@ -44,7 +38,6 @@ type Options struct {
 	Retries uint8 `long:"retries" default:"3" description:"Get/set action retries"`
 
 	Debug       []bool `short:"D" long:"debug"   description:"Debug mode, print raw packets"`
-	Quiet       []bool `short:"Q" long:"quiet"   description:"Quiet mode, print only values"`
 	ShowVersion func() `short:"V" long:"version" description:"Show application version"`
 }
 
@@ -93,12 +86,10 @@ func main() {
 
 	time.Sleep(5 * time.Second)
 
-	if len(opts.Quiet) == 0 {
-		if conn.Connected() {
-			logger.Info.Printf("Connected with %s\n", cs)
-		} else {
-			logger.Info.Printf("Not (yet?) connected with %s\n", cs)
-		}
+	if conn.Connected() {
+		logger.Info.Printf("Connected with %s\n", cs)
+	} else {
+		logger.Info.Printf("Not (yet?) connected with %s\n", cs)
 	}
 
 	success := false
@@ -135,9 +126,7 @@ func main() {
 	time.Sleep(100 * time.Millisecond)
 
 	if success {
-		if len(opts.Quiet) == 0 {
-			logger.Info.Printf("Done")
-		}
+		logger.Info.Printf("Done")
 		os.Exit(0)
 	} else {
 		os.Exit(1)
