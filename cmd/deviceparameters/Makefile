@@ -3,7 +3,7 @@
 BUILD_DATE = $(shell date -u '+%Y-%m-%d_%H:%M:%S')
 BUILD_DISTRO = $(shell lsb_release -sd)
 
-all: deviceparameters
+all: deviceparameters manual
 
 win32: export GOOS=windows
 win32: export GOARCH=386
@@ -39,3 +39,9 @@ manual: deviceparameters.1.gz
 install: deviceparameters manual
 	install -m 0755 deviceparameters /usr/local/bin
 	install -m 0644 deviceparameters /usr/local/man/man1
+
+clean:
+	rm -f deviceparameters
+	rm -f deviceparameters.1.gz
+
+.PHONY: clean
