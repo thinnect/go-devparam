@@ -1,0 +1,9 @@
+FROM docker.thinnect.net/ci/stretch-build-golang-deb-amd64:20190115
+
+# gcc for cgo
+# added checkinstall and lsb-release, when compared to official cgo Dockerfile
+RUN apt-get update && apt-get install -y --no-install-recommends \
+		ruby \
+		ruby-dev \
+	&& rm -rf /var/lib/apt/lists/* \
+	&& gem install ronn
