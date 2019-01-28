@@ -14,26 +14,12 @@ import "github.com/proactivity-lab/go-moteconnection"
 
 type DeviceParameter struct {
 	Name      string
-	Type      uint8
+	Type      DeviceParameterType
 	Seqnum    uint8
 	Value     []byte
 	Timestamp time.Time
 	Error     error
 }
-
-const (
-	DP_TYPE_RAW    = 0x00
-	DP_TYPE_UINT8  = 0x01
-	DP_TYPE_UINT16 = 0x02
-	DP_TYPE_UINT32 = 0x04
-	DP_TYPE_UINT64 = 0x08
-
-	DP_TYPE_STRING = 0x80
-	DP_TYPE_INT8   = 0x81
-	DP_TYPE_INT16  = 0x82
-	DP_TYPE_INT32  = 0x84
-	DP_TYPE_INT64  = 0x88
-)
 
 const TOS_SERIAL_DEVICE_PARAMETERS_ID = 0x80
 const AMID_DEVICE_PARAMETERS = 0x82
@@ -59,12 +45,18 @@ type DeviceParameterManager struct {
 }
 
 type ParameterError struct{ s string }
+type InvalidParameterValueError struct{ s string }
+type ValueMismatchError struct{ s string }
 type TimeoutError struct{ s string }
 
-func (self ParameterError) Error() string { return self.s }
-func NewParameterError(text string) error { return &ParameterError{text} }
-func (self TimeoutError) Error() string   { return self.s }
-func NewTimeoutError(text string) error   { return &TimeoutError{text} }
+func (self ParameterError) Error() string             { return self.s }
+func NewParameterError(text string) error             { return &ParameterError{text} }
+func (self InvalidParameterValueError) Error() string { return self.s }
+func NewInvalidParameterValueError(text string) error { return &InvalidParameterValueError{text} }
+func (self ValueMismatchError) Error() string         { return self.s }
+func NewValueMismatchError(text string) error         { return &ValueMismatchError{text} }
+func (self TimeoutError) Error() string               { return self.s }
+func NewTimeoutError(text string) error               { return &TimeoutError{text} }
 
 func NewDeviceParameterManager(sfc moteconnection.MoteConnection) *DeviceParameterManager {
 	dpm := new(DeviceParameterManager)
@@ -182,7 +174,8 @@ func (self *DeviceParameterManager) SetValue(name string, value []byte) (*Device
 				go self.run()
 				return dp, nil
 			} else {
-				result = errors.New(fmt.Sprintf("Returned value %X does not match set value %X!", dp.Value, value))
+				go self.run()
+				return dp, NewValueMismatchError(fmt.Sprintf("Returned value %X does not match set value %X!", dp.Value, value))
 			}
 		} else {
 			result = err
@@ -241,7 +234,7 @@ func (self *DeviceParameterManager) waitValueId(name string) (*DeviceParameter, 
 					p := new(DpParameter)
 					if err := moteconnection.DeserializePacket(p, payload); err == nil {
 						if p.Id == name {
-							return &DeviceParameter{name, p.Type, p.Seqnum, p.Value, time.Now(), nil}, nil
+							return &DeviceParameter{name, DeviceParameterType(p.Type), p.Seqnum, p.Value, time.Now(), nil}, nil
 						}
 					} else {
 						self.Error.Printf("Deserialize error %s %s\n", err, packet)
@@ -251,6 +244,9 @@ func (self *DeviceParameterManager) waitValueId(name string) (*DeviceParameter, 
 					if err := moteconnection.DeserializePacket(p, payload); err == nil {
 						if p.Id == name {
 							if p.Exists {
+								if p.Err == 6 { // EINVAL
+									return nil, NewInvalidParameterValueError(fmt.Sprintf("Something went wrong with parameter \"%s\", error %d - EINVAL!", name, p.Err))
+								}
 								return nil, errors.New(fmt.Sprintf("Something went wrong with parameter \"%s\", error %d!", name, p.Err))
 							} else {
 								return nil, NewParameterError(fmt.Sprintf("No parameter \"%s\" on device!", name))
@@ -291,7 +287,7 @@ func (self *DeviceParameterManager) waitValueSeqnum(seqnum uint8) (*DeviceParame
 					p := new(DpParameter)
 					if err := moteconnection.DeserializePacket(p, payload); err == nil {
 						if p.Seqnum == seqnum {
-							return &DeviceParameter{p.Id, p.Type, p.Seqnum, p.Value, time.Now(), nil}, nil
+							return &DeviceParameter{p.Id, DeviceParameterType(p.Type), p.Seqnum, p.Value, time.Now(), nil}, nil
 						}
 					} else {
 						self.Error.Printf("Deserialize error %s %s\n", err, packet)
@@ -383,6 +379,7 @@ func (self *DeviceParameterManager) Close() error {
 	if !self.closed {
 		self.closed = true
 		close(self.done)
+		self.sfc.RemoveDispatcher(self.dsp)
 		return nil
 	}
 	return errors.New("Close has already been called!")

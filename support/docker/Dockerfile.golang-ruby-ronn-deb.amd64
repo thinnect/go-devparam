@@ -1,0 +1,8 @@
+FROM docker.thinnect.net/ci/stretch-build-golang-deb-amd64:20190115
+
+# add ronn to a docker that has a go compiler
+RUN apt-get update && apt-get install -y --no-install-recommends \
+		ruby \
+		ruby-dev \
+	&& rm -rf /var/lib/apt/lists/* \
+	&& gem install ronn

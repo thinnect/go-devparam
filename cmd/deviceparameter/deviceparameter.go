@@ -149,8 +149,8 @@ type Options struct {
 	Int32  string `long:"i32" description:"Set value, type is int32"`
 	Int64  string `long:"i64" description:"Set value, type is int64"`
 
-	Debug       []bool `short:"D" long:"debug"   description:"Debug mode, print raw packets"`
 	Quiet       []bool `short:"Q" long:"quiet"   description:"Quiet mode, print only values"`
+	Debug       []bool `short:"D" long:"debug"   description:"Debug mode, print raw packets"`
 	ShowVersion func() `short:"V" long:"version" description:"Show application version"`
 }
 
