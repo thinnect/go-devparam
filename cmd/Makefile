@@ -10,11 +10,11 @@ deviceparameters:
 	cd deviceparameters && make clean && make
 
 install: deviceparameter deviceparameters
-	install -d -m0755 /usr/local/man/man1
+	install -d -m0755 /usr/share/man/man1
 	install -m0755  $(MAKEFILE_LOCATION)/deviceparameter/deviceparameter /usr/bin
-	install -m0664  $(MAKEFILE_LOCATION)/deviceparameter/deviceparameter.1.gz /usr/local/man/man1
+	install -m0664  $(MAKEFILE_LOCATION)/deviceparameter/deviceparameter.1.gz /usr/share/man/man1
 	install -m0755  $(MAKEFILE_LOCATION)/deviceparameters/deviceparameters /usr/bin
-	install -m0664  $(MAKEFILE_LOCATION)/deviceparameters/deviceparameters.1.gz /usr/local/man/man1
+	install -m0664  $(MAKEFILE_LOCATION)/deviceparameters/deviceparameters.1.gz /usr/share/man/man1
 
 .PHONY: deviceparameter
 .PHONY: deviceparameters
