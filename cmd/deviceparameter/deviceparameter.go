@@ -3,29 +3,32 @@
 
 package main
 
-import "fmt"
-import "os"
-import "log"
-import "time"
-import "errors"
-import "encoding/hex"
-import "encoding/binary"
-import "strconv"
-import "bytes"
+import (
+	"bytes"
+	"encoding/binary"
+	"encoding/hex"
+	"errors"
+	"fmt"
+	"log"
+	"os"
+	"strconv"
+	"time"
 
-import "github.com/jessevdk/go-flags"
-import "github.com/proactivity-lab/go-loggers"
-import "github.com/proactivity-lab/go-moteconnection"
-import "github.com/thinnect/go-devparam"
+	"github.com/jessevdk/go-flags"
+	"github.com/proactivity-lab/go-loggers"
+	"github.com/proactivity-lab/go-moteconnection"
+
+	deviceparameters "github.com/thinnect/go-devparam"
+)
 
 const ApplicationVersionMajor = 0
-const ApplicationVersionMinor = 2
-const ApplicationVersionPatch = 1
+const ApplicationVersionMinor = 3
+const ApplicationVersionPatch = 0
 
 var ApplicationBuildDate string
 var ApplicationBuildDistro string
 
-func parseValue(opts Options) ([]byte, error) {
+func parseValue(opts Options) ([]byte, bool, error) {
 	var value []byte
 	var err error
 	var t interface{}
@@ -36,7 +39,7 @@ func parseValue(opts Options) ([]byte, error) {
 			t = uint8(v)
 			c++
 		} else {
-			return nil, err
+			return nil, false, err
 		}
 	}
 	if len(opts.Uint16) > 0 {
@@ -44,7 +47,7 @@ func parseValue(opts Options) ([]byte, error) {
 			t = uint16(v)
 			c++
 		} else {
-			return nil, err
+			return nil, false, err
 		}
 	}
 	if len(opts.Uint32) > 0 {
@@ -52,7 +55,7 @@ func parseValue(opts Options) ([]byte, error) {
 			t = uint32(v)
 			c++
 		} else {
-			return nil, err
+			return nil, false, err
 		}
 	}
 	if len(opts.Uint64) > 0 {
@@ -60,7 +63,7 @@ func parseValue(opts Options) ([]byte, error) {
 			t = uint64(v)
 			c++
 		} else {
-			return nil, err
+			return nil, false, err
 		}
 	}
 	if len(opts.Int8) > 0 {
@@ -68,7 +71,7 @@ func parseValue(opts Options) ([]byte, error) {
 			t = int8(v)
 			c++
 		} else {
-			return nil, err
+			return nil, false, err
 		}
 	}
 	if len(opts.Int16) > 0 {
@@ -76,7 +79,7 @@ func parseValue(opts Options) ([]byte, error) {
 			t = int16(v)
 			c++
 		} else {
-			return nil, err
+			return nil, false, err
 		}
 	}
 	if len(opts.Int32) > 0 {
@@ -84,7 +87,7 @@ func parseValue(opts Options) ([]byte, error) {
 			t = int32(v)
 			c++
 		} else {
-			return nil, err
+			return nil, false, err
 		}
 	}
 	if len(opts.Int64) > 0 {
@@ -92,7 +95,7 @@ func parseValue(opts Options) ([]byte, error) {
 			t = int64(v)
 			c++
 		} else {
-			return nil, err
+			return nil, false, err
 		}
 	}
 
@@ -101,7 +104,7 @@ func parseValue(opts Options) ([]byte, error) {
 		case uint8, uint16, uint32, uint64, int8, int16, int32, int64:
 			buf := new(bytes.Buffer)
 			if err := binary.Write(buf, binary.BigEndian, t); err != nil {
-				return nil, err
+				return nil, false, err
 			}
 			value = buf.Bytes()
 		}
@@ -117,11 +120,16 @@ func parseValue(opts Options) ([]byte, error) {
 		c++
 	}
 
-	if c > 1 {
-		return nil, errors.New("Multiple values specified for parameter!")
+	if len(opts.Null) > 0 {
+		value = []byte("")
+		c++
 	}
 
-	return value, err
+	if c > 1 {
+		return nil, false, errors.New("Multiple values specified for parameter")
+	}
+
+	return value, true, err
 }
 
 type Options struct {
@@ -148,6 +156,7 @@ type Options struct {
 	Int16  string `long:"i16" description:"Set value, type is int16"`
 	Int32  string `long:"i32" description:"Set value, type is int32"`
 	Int64  string `long:"i64" description:"Set value, type is int64"`
+	Null   []bool `long:"null" description:"Set value to empty"`
 
 	Quiet       []bool `short:"Q" long:"quiet"   description:"Quiet mode, print only values"`
 	Debug       []bool `short:"D" long:"debug"   description:"Debug mode, print raw packets"`
@@ -207,12 +216,12 @@ func main() {
 	success := false
 
 	if len(opts.Parameter) > 0 {
-		value, err := parseValue(opts)
+		value, set, err := parseValue(opts)
 		if err != nil {
 			logger.Error.Printf("%s", err)
-		} else if value != nil && len(opts.Parameter) > 1 {
+		} else if set && len(opts.Parameter) > 1 {
 			logger.Error.Printf("Value and multiple parameters provided\n")
-		} else if value == nil {
+		} else if set == false {
 			for _, parameter := range opts.Parameter {
 				if len(opts.Quiet) == 0 {
 					logger.Info.Printf("Get %s\n", parameter)
