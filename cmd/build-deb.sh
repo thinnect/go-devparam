@@ -9,7 +9,7 @@ OPTIONS+=" --install=no"  # just make, don't install the package
 OPTIONS+=" --nodoc"       # as long as actual docs don't exist
 
 OPTIONS+=" --pkgname=mist-device-parameters"
-OPTIONS+=" --pkgversion=0.1.0"
+OPTIONS+=" --pkgversion=0.3.0"
 OPTIONS+=" --pkgrelease=$RELEASE_DATE"
 OPTIONS+=" --provides=mist-device-parameters"
 OPTIONS+=" --pkglicense=MIT"
