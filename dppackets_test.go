@@ -3,10 +3,14 @@
 
 package deviceparameters
 
-import "testing"
-import "fmt"
-import "encoding/hex"
-import "github.com/proactivity-lab/go-sfconnection"
+import (
+	"encoding/hex"
+	"fmt"
+	"strings"
+	"testing"
+
+	"github.com/proactivity-lab/go-moteconnection"
+)
 
 func TestSerializer(t *testing.T) {
 	var p DpParameter
@@ -15,7 +19,7 @@ func TestSerializer(t *testing.T) {
 	p.Id = "test"
 	p.Value = []byte{1, 2, 3}
 	fmt.Printf("np %v\n", p)
-	b := sfconnection.SerializePacket(&p)
+	b := moteconnection.SerializePacket(&p)
 	fmt.Printf("sp %v\n", p)
 	fmt.Printf("rb %X\n", b)
 }
@@ -23,9 +27,10 @@ func TestSerializer(t *testing.T) {
 func TestDeserializer(t *testing.T) {
 	var dp DpParameter
 
-	raw, _ := hex.DecodeString("1000040374657374010203")
-	if err := sfconnection.DeserializePacket(&dp, raw); err != nil {
-		t.Error("error %s", err)
+	s := strings.Replace("10 00 04 04 03 74657374 010203", " ", "", -1)
+	raw, _ := hex.DecodeString(s)
+	if err := moteconnection.DeserializePacket(&dp, raw); err != nil {
+		t.Errorf("error %s", err)
 	}
 
 	fmt.Printf("dp %v\n", dp)

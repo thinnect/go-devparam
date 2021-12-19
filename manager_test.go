@@ -3,16 +3,18 @@
 
 package deviceparameters
 
-import "testing"
+import (
+	"fmt"
+	"log"
+	"os"
+	"testing"
+	"time"
 
-import "log"
-import "os"
-import "fmt"
-import "time"
-import "github.com/proactivity-lab/go-sfconnection"
+	"github.com/proactivity-lab/go-moteconnection"
+)
 
 func TestDpm(t *testing.T) {
-	sfc := sfconnection.NewSfConnection()
+	sfc := moteconnection.NewSfConnection("localhost", 9002)
 	dp := NewDeviceParameterManager(sfc)
 
 	logformat := log.Ldate | log.Ltime | log.Lmicroseconds | log.Lshortfile
@@ -31,14 +33,14 @@ func TestDpm(t *testing.T) {
 	dp.SetWarningLogger(warninglogger)
 	dp.SetErrorLogger(errorlogger)
 
-	sfc.Autoconnect("localhost", 9002, 30*time.Second)
+	sfc.Autoconnect(30 * time.Second)
 
 	time.Sleep(time.Second)
 
 	v1, err := dp.GetValue("radio_channel")
 	fmt.Printf("%v %v\n", v1, err)
 
-	v2, err := dp.GetValue("ident")
+	v2, err := dp.GetValue("ident_timestamp")
 	fmt.Printf("%v %v\n", v2, err)
 
 	v3, err := dp.GetValue("dummy")
