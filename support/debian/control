@@ -1,0 +1,10 @@
+Source: mist-device-parameters
+Section: misc
+Priority: optional
+Maintainer: Raido Pahtma <raido@thinnect.com>
+Build-Depends: debhelper (>= 9)
+
+Package: mist-device-parameters
+Architecture: any
+Description: Mist deviceparameter and deviceparameters.
+ Tools for configuring Mist devices.
