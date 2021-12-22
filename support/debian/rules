@@ -1,0 +1,22 @@
+#!/usr/bin/make -f
+
+clean:
+	make -C ../cmd/deviceparameter clean
+	make -C ../cmd/deviceparameters clean
+
+build:
+	make -C ../cmd/deviceparameter $(DEB_HOST_ARCH) USE_UPX=1
+	make -C ../cmd/deviceparameters $(DEB_HOST_ARCH) USE_UPX=1
+
+binary:
+	mkdir -p debian/mist-device-parameters/usr/bin
+	mkdir -p debian/mist-device-parameters/usr/share/man/man1
+
+	cp ../cmd/deviceparameter/build/linux-$(DEB_HOST_ARCH)/deviceparameter debian/mist-device-parameters/usr/bin/
+	cp ../cmd/deviceparameter/build/linux-$(DEB_HOST_ARCH)/deviceparameter.1.gz debian/mist-device-parameters/usr/share/man/man1/
+
+	cp ../cmd/deviceparameters/build/linux-$(DEB_HOST_ARCH)/deviceparameters debian/mist-device-parameters/usr/bin/
+	cp ../cmd/deviceparameters/build/linux-$(DEB_HOST_ARCH)/deviceparameters.1.gz debian/mist-device-parameters/usr/share/man/man1/
+
+	dh_gencontrol
+	dh_builddeb

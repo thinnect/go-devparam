@@ -1,0 +1,5 @@
+mist-device-parameters (0.4.0-1) stretch; urgency=medium
+
+  * Bugfix release with new build env.
+
+ -- Raido Pahtma <raido@thinnect.com>  Tue, 12 Dec 2021 12:00:00 +0000

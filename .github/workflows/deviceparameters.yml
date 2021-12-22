@@ -1,0 +1,51 @@
+name: build-deviceparameters
+on: [push]
+jobs:
+  build:
+    runs-on: ubuntu-20.04
+    steps:
+    - uses: actions/checkout@v2
+
+    - name: Setup Go
+      uses: actions/setup-go@v2
+      with:
+        go-version: '1.17.2'
+
+    - name: Install build tools
+      run: sudo apt update && sudo apt install -y lsb-release build-essential debhelper upx ruby ruby-dev
+
+    - name: Install ronn for converting manpages
+      run: sudo gem install ronn
+
+    # AMD64
+    - name: Build for amd64
+      run: cd support && make amd64
+
+    - name: Install amd64
+      run: sudo dpkg -i mist-device-parameters_*_amd64.deb
+
+    - name: Run installed deviceparamter
+      run: deviceparameter -V
+
+    - name: Run installed deviceparamters
+      run: deviceparameters -V
+
+    # ARMv5 / armel
+    - name: Build for armel(arm5)
+      run: cd support && make armel
+
+    # ARMv6 / armhf
+    - name: Build for armhf(arm6)
+      run: cd support && make armhf
+
+    # Windows
+    - name: Build for Windows
+      run: cd support && make win64
+
+    # Publish
+    - uses: ncipollo/release-action@v1
+      if: startsWith(github.ref, 'refs/tags/')
+      with:
+        artifacts: "mist-device-parameters_*.deb,mist-device-parameters_*.zip"
+        token: ${{ secrets.GITHUB_TOKEN }}
+        draft: true

@@ -3,19 +3,21 @@
 
 package main
 
-import "fmt"
-import "os"
-import "log"
-import "time"
-import "os/signal"
+import (
+	"fmt"
+	"log"
+	"os"
+	"os/signal"
+	"time"
 
-import "github.com/jessevdk/go-flags"
-import "github.com/proactivity-lab/go-loggers"
-import "github.com/proactivity-lab/go-moteconnection"
-import "github.com/thinnect/go-devparam/director"
+	"github.com/jessevdk/go-flags"
+	"github.com/proactivity-lab/go-loggers"
+	"github.com/proactivity-lab/go-moteconnection"
+	"github.com/thinnect/go-devparam/director"
+)
 
 const ApplicationVersionMajor = 0
-const ApplicationVersionMinor = 3
+const ApplicationVersionMinor = 4
 const ApplicationVersionPatch = 0
 
 var ApplicationBuildDate string

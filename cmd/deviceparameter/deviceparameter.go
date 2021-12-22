@@ -22,7 +22,7 @@ import (
 )
 
 const ApplicationVersionMajor = 0
-const ApplicationVersionMinor = 3
+const ApplicationVersionMinor = 4
 const ApplicationVersionPatch = 0
 
 var ApplicationBuildDate string
@@ -129,7 +129,7 @@ func parseValue(opts Options) ([]byte, bool, error) {
 		return nil, false, errors.New("Multiple values specified for parameter")
 	}
 
-	return value, true, err
+	return value, c > 0, err
 }
 
 type Options struct {
