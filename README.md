@@ -11,20 +11,14 @@ See the [deviceparameter README](cmd/deviceparameter/README.md) for details.
 A utility for dealing with several parameters on multiple nodes.
 See the [deviceparameters README](cmd/deviceparameters/README.md) for details.
 
-# Dependencies
-Go dependencies have been vendored as submodules under the vendor directory.
-
-Building the _deb_ package requires `checkinstall` and `ronn`.
-
-`ronn` can be obtained from <https://github.com/rtomayko/ronn>.
-
 # Building
 
-Check out all submodules, install `ronn` and `checkinstall`.
+Enter `cmd/deviceparameter` or `cmd/deviceparameters` and execute `make` to
+see supported targets. Both applications can be cross-compiled for Windows and
+for use on ARM based Linux platforms.
 
-Enter `cmd/deviceparameter` or `cmd/deviceparameters` and execute `make` or
-enter `cmd` and execute the `build-deb.sh` script.
+Packaged versions can be built from the support directory, see the
+[support/Makefile](support/Makefile) for available options.
 
-Both applications can be cross-compiled for Windows and for use on ARM based
-Linux platforms, though packaging only works on the native architecture. Take a
-look at the Makefiles for details.
+Building the deb packages requires `ronn`, which can be installed with ruby's
+`gem` or can be obtained from <https://github.com/rtomayko/ronn>.
