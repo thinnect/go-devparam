@@ -13,6 +13,8 @@ github.com/joaojeronimo/go-crc16 v0.0.0-20140729130949-59bd0194935e h1:LY29wmnTc
 github.com/joaojeronimo/go-crc16 v0.0.0-20140729130949-59bd0194935e/go.mod h1:+X++CLDTje8Yr7J4bGuUYx5LVbNpXPeO5ZLpI42hKVk=
 github.com/proactivity-lab/go-loggers v0.0.0-20180417085828-f892709079bd h1:Q7CS1r9FUY6kSagUaAdLPMtY4MfKvG/eij2qcKqu7Ds=
 github.com/proactivity-lab/go-loggers v0.0.0-20180417085828-f892709079bd/go.mod h1:PgvbfPpF7oknORD8/LicJY9ehj/R03KPx4uf1YEpntc=
+github.com/raidoz/go-moteconnection v0.0.3 h1:Zp16ZKQ2ftkQPwR6viugHrnc2xAs9gl/n5Kxj7FtPkU=
+github.com/raidoz/go-moteconnection v0.0.3/go.mod h1:g4pf3FYRN/h5FhQ5qw9n3a/Koe6UulzusHym92sf47Q=
 github.com/streadway/amqp v1.1.0 h1:py12iX8XSyI7aN/3dUT8DFIDJazNJsVJdxNVEpnQTZM=
 github.com/streadway/amqp v1.1.0/go.mod h1:WYSrTEYHOXHd0nwFeUXAe2G2hRnQT+deZJJf88uS9Bg=
 go.bug.st/serial.v1 v0.0.0-20191202182710-24a6610f0541 h1:eQfoPfT+gNSh63t/oKanQlZyKgblRa/LMZRPIT+MHzA=
