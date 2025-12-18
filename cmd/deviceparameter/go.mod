@@ -11,8 +11,6 @@ require (
 	github.com/thinnect/go-devparam v0.0.0-00010101000000-000000000000
 )
 
-replace github.com/raidoz/go-moteconnection => /home/raido/workspace_go/src/github.com/raidoz/go-moteconnection
-
 require (
 	github.com/creack/goselect v0.1.2 // indirect
 	github.com/golang/protobuf v1.5.4 // indirect
