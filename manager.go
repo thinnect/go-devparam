@@ -3,14 +3,16 @@
 
 package deviceparameters
 
-import "fmt"
-import "time"
-import "errors"
-import "bytes"
-import "encoding/binary"
+import (
+	"bytes"
+	"encoding/binary"
+	"errors"
+	"fmt"
+	"time"
 
-import "github.com/proactivity-lab/go-loggers"
-import "github.com/proactivity-lab/go-moteconnection"
+	"github.com/proactivity-lab/go-loggers"
+	"github.com/raidoz/go-moteconnection"
+)
 
 type DeviceParameter struct {
 	Name      string
@@ -38,7 +40,10 @@ type DeviceParameterManager struct {
 
 	receive chan moteconnection.Packet
 
-	destination moteconnection.AMAddr // Optional destination
+	destination16 moteconnection.AMAddr // Optional destination with 16-bit moteconnection
+
+	gateway       moteconnection.EUI64
+	destination64 moteconnection.EUI64 // Optional destination with universal addressing
 
 	done   chan bool
 	closed bool
@@ -88,9 +93,31 @@ func NewDeviceParameterActiveMessageManager(sfc moteconnection.MoteConnection, g
 	dpm.receive = make(chan moteconnection.Packet)
 	dpm.timeout = time.Second
 	dpm.retries = 3
-	dpm.destination = destination
+	dpm.destination16 = destination
 
 	dsp := moteconnection.NewMessageDispatcher(moteconnection.NewMessage(group, address))
+	dsp.RegisterMessageReceiver(AMID_DEVICE_PARAMETERS, dpm.receive)
+	dpm.dsp = dsp
+
+	dpm.sfc = sfc
+	dpm.sfc.AddDispatcher(dpm.dsp)
+
+	go dpm.run()
+	return dpm
+}
+
+func NewDeviceParameterMistCommManager(sfc moteconnection.MoteConnection, group moteconnection.AMGroup, source moteconnection.EUI64, destination moteconnection.EUI64) *DeviceParameterManager {
+	dpm := new(DeviceParameterManager)
+	dpm.InitLoggers()
+	dpm.values = make(map[string]*DeviceParameter)
+	dpm.done = make(chan bool)
+	dpm.closed = false
+	dpm.receive = make(chan moteconnection.Packet)
+	dpm.timeout = time.Second
+	dpm.retries = 3
+	dpm.destination64 = destination
+
+	dsp := moteconnection.NewMessageDispatcher(moteconnection.NewMoteMistMessage(group, 0xFFFFFFFFFFFFFFFF, source))
 	dsp.RegisterMessageReceiver(AMID_DEVICE_PARAMETERS, dpm.receive)
 	dpm.dsp = dsp
 
@@ -118,9 +145,13 @@ func (self *DeviceParameterManager) GetValue(name string) (*DeviceParameter, err
 	for retries := 0; retries <= self.retries; retries++ {
 		// Send get request
 		msg := self.dsp.NewPacket()
-		if self.destination != 0 {
-			msg.(*moteconnection.Message).SetDestination(self.destination)
+		if self.destination16 != 0 {
+			msg.(*moteconnection.Message).SetDestination(self.destination16)
 			msg.(*moteconnection.Message).SetType(AMID_DEVICE_PARAMETERS)
+		}
+		if self.destination64 != 0 {
+			msg.(*moteconnection.MoteMistMessage).SetDestination(self.destination64)
+			msg.(*moteconnection.MoteMistMessage).SetType(AMID_DEVICE_PARAMETERS)
 		}
 		payload := new(DpGetParameterId)
 		payload.Header = DP_GET_PARAMETER_WITH_ID
@@ -154,9 +185,13 @@ func (self *DeviceParameterManager) SetValue(name string, value []byte) (*Device
 	for retries := 0; retries <= self.retries; retries++ {
 		// Send set request
 		msg := self.dsp.NewPacket()
-		if self.destination != 0 {
-			msg.(*moteconnection.Message).SetDestination(self.destination)
+		if self.destination16 != 0 {
+			msg.(*moteconnection.Message).SetDestination(self.destination16)
 			msg.(*moteconnection.Message).SetType(AMID_DEVICE_PARAMETERS)
+		}
+		if self.destination64 != 0 {
+			msg.(*moteconnection.MoteMistMessage).SetDestination(self.destination64)
+			msg.(*moteconnection.MoteMistMessage).SetType(AMID_DEVICE_PARAMETERS)
 		}
 		payload := new(DpSetParameterId)
 		payload.Header = DP_SET_PARAMETER_WITH_ID
@@ -221,9 +256,17 @@ func (self *DeviceParameterManager) waitValueId(name string) (*DeviceParameter, 
 		case packet := <-self.receive:
 			payload := packet.GetPayload()
 
-			if self.destination != 0 {
+			if self.destination16 != 0 {
 				msg, ok := packet.(*moteconnection.Message)
-				if !ok || msg.Source() != self.destination {
+				if !ok || msg.Source() != self.destination16 {
+					self.Debug.Printf("Ignoring packet %s\n", packet)
+					payload = nil
+				}
+			}
+
+			if self.destination64 != 0 {
+				msg, ok := packet.(*moteconnection.MoteMistMessage)
+				if !ok || msg.Source() != self.destination64 {
 					self.Debug.Printf("Ignoring packet %s\n", packet)
 					payload = nil
 				}
@@ -274,9 +317,17 @@ func (self *DeviceParameterManager) waitValueSeqnum(seqnum uint8) (*DeviceParame
 		case packet := <-self.receive:
 			payload := packet.GetPayload()
 
-			if self.destination != 0 {
+			if self.destination16 != 0 {
 				msg, ok := packet.(*moteconnection.Message)
-				if !ok || msg.Source() != self.destination {
+				if !ok || msg.Source() != self.destination16 {
+					self.Debug.Printf("Ignoring packet %s\n", packet)
+					payload = nil
+				}
+			}
+
+			if self.destination64 != 0 {
+				msg, ok := packet.(*moteconnection.MoteMistMessage)
+				if !ok || msg.Source() != self.destination64 {
 					self.Debug.Printf("Ignoring packet %s\n", packet)
 					payload = nil
 				}
@@ -323,10 +374,15 @@ func (self *DeviceParameterManager) getList(delivery chan *DeviceParameter) {
 			self.Debug.Printf("Get %d %d/%d\n", i, retries, self.retries)
 			// Send get request
 			msg := self.dsp.NewPacket()
-			if self.destination != 0 {
-				msg.(*moteconnection.Message).SetDestination(self.destination)
+			if self.destination16 != 0 {
+				msg.(*moteconnection.Message).SetDestination(self.destination16)
 				msg.(*moteconnection.Message).SetType(AMID_DEVICE_PARAMETERS)
 			}
+			if self.destination64 != 0 {
+				msg.(*moteconnection.MoteMistMessage).SetDestination(self.destination64)
+				msg.(*moteconnection.MoteMistMessage).SetType(AMID_DEVICE_PARAMETERS)
+			}
+
 			payload := new(DpGetParameterSeqnum)
 			payload.Header = DP_GET_PARAMETER_WITH_SEQNUM
 			payload.Seqnum = uint8(i)

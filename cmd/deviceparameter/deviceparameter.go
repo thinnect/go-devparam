@@ -16,7 +16,7 @@ import (
 
 	"github.com/jessevdk/go-flags"
 	"github.com/proactivity-lab/go-loggers"
-	"github.com/proactivity-lab/go-moteconnection"
+	"github.com/raidoz/go-moteconnection"
 
 	deviceparameters "github.com/thinnect/go-devparam"
 )
@@ -126,7 +126,7 @@ func parseValue(opts Options) ([]byte, bool, error) {
 	}
 
 	if c > 1 {
-		return nil, false, errors.New("Multiple values specified for parameter")
+		return nil, false, errors.New("multiple values specified for parameter")
 	}
 
 	return value, c > 0, err
@@ -140,6 +140,13 @@ type Options struct {
 	Group       moteconnection.AMGroup `short:"g" long:"group" default:"22" description:"Packet AM Group (hex)"`
 	Address     moteconnection.AMAddr  `short:"a" long:"address" default:"5678" description:"Source AM address (hex)"`
 	Destination moteconnection.AMAddr  `short:"d" long:"destination" default:"0" description:"Destination AM address (hex)"`
+
+	// Exchange
+	// Name for queues
+	// EUI64 source address to use for messages
+	AddressEui64     moteconnection.EUI64 `long:"address-eui64" default:"0015001500150015" description:"Source EUI64 address (hex)"`
+	GatewayEui64     moteconnection.EUI64 `long:"gateway-eui64" default:"FFFFFFFFFFFFFFFF" description:"Source EUI64 address (hex)"`
+	DestinationEui64 moteconnection.EUI64 `long:"destination-eui64" default:"0000000000000000" description:"Source EUI64 address (hex)"`
 
 	Timeout int `long:"timeout" default:"1" description:"Get/set action timeout (seconds)"`
 	Retries int `long:"retries" default:"3" description:"Get/set action retries"`
@@ -190,10 +197,13 @@ func main() {
 	}
 
 	var dpm *deviceparameters.DeviceParameterManager = nil
-	if opts.Destination == 0 {
-		dpm = deviceparameters.NewDeviceParameterManager(conn)
-	} else {
+	if opts.DestinationEui64 != 0 {
+		conn.(*moteconnection.MistCloudConnection).Configure("deviceparameter", opts.GatewayEui64)
+		dpm = deviceparameters.NewDeviceParameterMistCommManager(conn, opts.Group, opts.AddressEui64, opts.DestinationEui64)
+	} else if opts.Destination != 0 {
 		dpm = deviceparameters.NewDeviceParameterActiveMessageManager(conn, opts.Group, opts.Address, opts.Destination)
+	} else {
+		dpm = deviceparameters.NewDeviceParameterManager(conn)
 	}
 	dpm.SetTimeout(time.Duration(opts.Timeout) * time.Second)
 	dpm.SetRetries(opts.Retries)
@@ -221,7 +231,7 @@ func main() {
 			logger.Error.Printf("%s", err)
 		} else if set && len(opts.Parameter) > 1 {
 			logger.Error.Printf("Value and multiple parameters provided\n")
-		} else if set == false {
+		} else if !set {
 			for _, parameter := range opts.Parameter {
 				if len(opts.Quiet) == 0 {
 					logger.Info.Printf("Get %s\n", parameter)

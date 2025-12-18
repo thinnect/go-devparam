@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/proactivity-lab/go-moteconnection"
+	"github.com/raidoz/go-moteconnection"
 )
 
 func TestSerializer(t *testing.T) {

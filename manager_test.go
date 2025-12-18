@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/proactivity-lab/go-moteconnection"
+	"github.com/raidoz/go-moteconnection"
 )
 
 func TestDpm(t *testing.T) {

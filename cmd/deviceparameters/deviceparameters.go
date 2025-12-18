@@ -12,12 +12,12 @@ import (
 
 	"github.com/jessevdk/go-flags"
 	"github.com/proactivity-lab/go-loggers"
-	"github.com/proactivity-lab/go-moteconnection"
+	"github.com/raidoz/go-moteconnection"
 	"github.com/thinnect/go-devparam/director"
 )
 
 const ApplicationVersionMajor = 0
-const ApplicationVersionMinor = 4
+const ApplicationVersionMinor = 5
 const ApplicationVersionPatch = 0
 
 var ApplicationBuildDate string
@@ -32,6 +32,9 @@ type Options struct {
 
 	Group   moteconnection.AMGroup `short:"g" long:"group" default:"22" description:"Packet AM Group (hex)"`
 	Address moteconnection.AMAddr  `short:"a" long:"address" default:"5678" description:"Source AM address (hex)"`
+
+	AddressEui64 moteconnection.EUI64 `long:"address-eui64" default:"0015001500150015" description:"Source EUI64 address (hex)"`
+	GatewayEui64 moteconnection.EUI64 `long:"gateway-eui64" default:"FFFFFFFFFFFFFFFF" description:"Source EUI64 address (hex)"`
 
 	Template string `short:"t" long:"template" default:"" description:"Template for activities."`
 	List     string `short:"l" long:"list" default:"" description:"List of nodes to apply the template for."`
@@ -69,9 +72,18 @@ func main() {
 		os.Exit(1)
 	}
 
-	dpd, err := director.NewDeviceParameterDirector(conn, opts.Group, opts.Address,
-		director.Timeout(time.Duration(opts.Timeout)*time.Second),
-		director.Retries(opts.Retries))
+	var dpd *director.DeviceParameterDirector
+	switch c := conn.(type) {
+	case *moteconnection.MistCloudConnection:
+		c.Configure("deviceparameters", opts.GatewayEui64)
+		dpd, err = director.NewMistDeviceParameterDirector(c, opts.Group, opts.AddressEui64,
+			director.Timeout(time.Duration(opts.Timeout)*time.Second),
+			director.Retries(opts.Retries))
+	default:
+		dpd, err = director.NewDeviceParameterDirector(c, opts.Group, opts.Address,
+			director.Timeout(time.Duration(opts.Timeout)*time.Second),
+			director.Retries(opts.Retries))
+	}
 
 	if err != nil {
 		fmt.Printf("ERROR: %s\n", err)

@@ -3,26 +3,25 @@
 
 package director
 
-import "os"
-import "io"
-import "bufio"
+import (
+	"bufio"
+	"encoding/csv"
+	"errors"
+	"fmt"
+	"io"
+	"os"
+	"strconv"
+	"strings"
+	"time"
 
-import "fmt"
-import "time"
-import "strconv"
-import "strings"
+	"github.com/proactivity-lab/go-loggers"
+	"github.com/raidoz/go-moteconnection"
 
-import "errors"
-
-import "encoding/csv"
-
-import "github.com/proactivity-lab/go-loggers"
-import "github.com/proactivity-lab/go-moteconnection"
-
-import dp "github.com/thinnect/go-devparam"
+	dp "github.com/thinnect/go-devparam"
+)
 
 type DeviceParameterTask struct {
-	Address   moteconnection.AMAddr
+	Address   moteconnection.EUI64
 	Parameter string
 	Type      dp.DeviceParameterType
 	Desired   []byte
@@ -36,9 +35,10 @@ type DeviceParameterTask struct {
 type DeviceParameterDirector struct {
 	loggers.DIWEloggers
 
-	conn    moteconnection.MoteConnection
-	group   moteconnection.AMGroup
-	address moteconnection.AMAddr
+	conn      moteconnection.MoteConnection
+	group     moteconnection.AMGroup
+	address16 moteconnection.AMAddr
+	address64 moteconnection.EUI64
 	//dsp  moteconnection.Dispatcher
 
 	timeout time.Duration
@@ -66,6 +66,30 @@ func (dpd *DeviceParameterDirector) Option(opts ...option) (option, error) {
 	return prev, nil
 }
 
+func NewMistDeviceParameterDirector(conn moteconnection.MoteConnection,
+	group moteconnection.AMGroup, address moteconnection.EUI64,
+	opts ...option) (*DeviceParameterDirector, error) {
+
+	dpd := new(DeviceParameterDirector)
+	dpd.conn = conn
+	dpd.group = group
+	dpd.address64 = address
+
+	dpd.timeout = 30 * time.Second
+	dpd.retries = 2
+
+	dpd.interrupt = make(chan bool)
+
+	for _, opt := range opts {
+		_, err := opt(dpd)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return dpd, nil
+}
+
 func NewDeviceParameterDirector(conn moteconnection.MoteConnection,
 	group moteconnection.AMGroup, address moteconnection.AMAddr,
 	opts ...option) (*DeviceParameterDirector, error) {
@@ -73,7 +97,7 @@ func NewDeviceParameterDirector(conn moteconnection.MoteConnection,
 	dpd := new(DeviceParameterDirector)
 	dpd.conn = conn
 	dpd.group = group
-	dpd.address = address
+	dpd.address16 = address
 
 	dpd.timeout = 30 * time.Second
 	dpd.retries = 2
@@ -165,7 +189,7 @@ func (dpd *DeviceParameterDirector) run() {
 	interrupted := false
 	for interrupted == false {
 		// organize a queue of nodes
-		ns := make(map[moteconnection.AMAddr]bool)
+		ns := make(map[moteconnection.EUI64]bool)
 		for _, task := range dpd.tasks {
 			if task.Disabled == false && task.Blocked == false && task.Actual == nil {
 				ns[task.Address] = true
@@ -174,7 +198,7 @@ func (dpd *DeviceParameterDirector) run() {
 		if len(ns) == 0 {
 			break
 		}
-		q := make([]moteconnection.AMAddr, 0, len(ns))
+		q := make([]moteconnection.EUI64, 0, len(ns))
 		for k := range ns {
 			q = append(q, k)
 		}
@@ -182,7 +206,12 @@ func (dpd *DeviceParameterDirector) run() {
 		dpd.Debug.Printf("%d nodes in queue\n", len(q))
 		// start processing the queue
 		for _, node := range q {
-			dpm := dp.NewDeviceParameterActiveMessageManager(dpd.conn, dpd.group, dpd.address, node)
+			var dpm *dp.DeviceParameterManager
+			if dpd.address64 != 0 {
+				dpm = dp.NewDeviceParameterMistCommManager(dpd.conn, dpd.group, dpd.address64, node)
+			} else {
+				dpm = dp.NewDeviceParameterActiveMessageManager(dpd.conn, dpd.group, dpd.address16, moteconnection.AMAddr(node))
+			}
 			dpm.SetTimeout(dpd.timeout)
 			dpm.SetRetries(int(dpd.retries))
 
@@ -312,14 +341,15 @@ func (dpd *DeviceParameterDirector) readTaskFile(filepath string) ([]DeviceParam
 		}
 
 		// validate node address
-		addr64, err := strconv.ParseUint(line[0], 16, 16)
+		addr64, err := strconv.ParseUint(line[0], 16, 64)
 		if err != nil {
 			return nil, err
 		}
-		addr := moteconnection.AMAddr(addr64)
 
-		if 0 < addr && addr < 0xFFFF {
-			task.Address = addr
+		if dpd.address64 != 0 && 0 < addr64 && addr64 < 0xFFFFFFFFFFFFFFFF {
+			task.Address = moteconnection.EUI64(addr64)
+		} else if dpd.address16 != 0 && 0 < addr64 && addr64 < 0xFFFF {
+			task.Address = moteconnection.EUI64(addr64)
 		} else {
 			return nil, errors.New(fmt.Sprintf("'%s' is not a valid address!", line[0]))
 		}
@@ -363,7 +393,7 @@ func (dpd *DeviceParameterDirector) readTaskFile(filepath string) ([]DeviceParam
 	return tasks, nil
 }
 
-func (dpd *DeviceParameterDirector) readNodeFile(filepath string) ([]moteconnection.AMAddr, error) {
+func (dpd *DeviceParameterDirector) readNodeFile(filepath string) ([]moteconnection.EUI64, error) {
 	nf, err := os.Open(filepath)
 	if err != nil {
 		return nil, err
@@ -372,12 +402,12 @@ func (dpd *DeviceParameterDirector) readNodeFile(filepath string) ([]moteconnect
 
 	scanner := bufio.NewScanner(bufio.NewReader(nf))
 
-	nodes := make([]moteconnection.AMAddr, 0)
+	nodes := make([]moteconnection.EUI64, 0)
 	for scanner.Scan() {
 		t := strings.TrimSpace(scanner.Text())
 		if len(t) > 0 && strings.HasPrefix(t, "#") == false {
-			if addr, err := strconv.ParseUint(t, 16, 16); err == nil {
-				nodes = append(nodes, moteconnection.AMAddr(addr))
+			if addr, err := strconv.ParseUint(t, 16, 64); err == nil {
+				nodes = append(nodes, moteconnection.EUI64(addr))
 			} else {
 				return nil, err
 			}
