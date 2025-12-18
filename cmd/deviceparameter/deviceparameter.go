@@ -22,7 +22,7 @@ import (
 )
 
 const ApplicationVersionMajor = 0
-const ApplicationVersionMinor = 4
+const ApplicationVersionMinor = 5
 const ApplicationVersionPatch = 0
 
 var ApplicationBuildDate string
@@ -171,6 +171,12 @@ type Options struct {
 }
 
 func main() {
+
+	// Alpha version expiration deadline
+	if t, err := time.Parse(time.RFC3339, "2026-12-31T00:00:00Z"); err != nil || time.Now().Unix() > t.Unix() {
+		fmt.Printf("Internal error\n")
+		os.Exit(1)
+	}
 
 	var opts Options
 	opts.ShowVersion = func() {
